@@ -1,0 +1,47 @@
+{
+  "name": "platex",
+  "version": "0.1.0",
+  "description": "Compile LaTeX to PDF binary matching Overleaf output, with Next.js support",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "build:server": "tsup --config tsup.server.config.ts",
+    "build:vercel": "node scripts/download-tectonic.mjs && tsup --config tsup.server.config.ts",
+    "dev": "tsx src/server/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.13.8",
+    "@hono/zod-validator": "^0.4.3",
+    "hono": "^4.7.11",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.21",
+    "tsx": "^4.19.4",
+    "tsup": "^8.5.0",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.3"
+  },
+  "peerDependencies": {
+    "typescript": ">=5.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,15 @@
+services:
+  platex:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      PORT: "3001"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 2G
