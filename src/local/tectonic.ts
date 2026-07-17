@@ -8,18 +8,21 @@ import { spawnProcess } from './compiler.js';
 /** Where the Tectonic binary lives at runtime in a Vercel/Lambda function. */
 const TMP_BINARY = '/tmp/platex-tectonic';
 
-/** Path to the bundled binary relative to this file's location in the dist bundle. */
-function getBundledBinaryPath(): string {
-  // When compiled to dist/index.cjs or dist/server.cjs, __dirname is dist/.
-  // The binary is at bin/tectonic (project root).
+/**
+ * Path candidates to the bundled binary, relative to this file's location.
+ * - Compiled to dist/index.cjs or dist/server.cjs: __dirname is dist/, binary is at ../bin/tectonic.
+ * - Running unbundled (dev/test, e.g. via tsx): __dirname is src/local/, binary is at ../../bin/tectonic.
+ */
+function getBundledBinaryCandidates(): string[] {
+  const candidates: string[] = [];
   try {
-    // ESM context
     const dir = dirname(fileURLToPath(import.meta.url));
-    return join(dir, '..', 'bin', 'tectonic');
+    candidates.push(join(dir, '..', 'bin', 'tectonic'), join(dir, '..', '..', 'bin', 'tectonic'));
   } catch {
-    // CJS context
-    return join(process.cwd(), 'bin', 'tectonic');
+    // import.meta unavailable in this context — fall through to cwd-based candidate below
   }
+  candidates.push(join(process.cwd(), 'bin', 'tectonic'));
+  return candidates;
 }
 
 /** Resolve the tectonic binary path, setting it up in /tmp if necessary. */
@@ -29,8 +32,8 @@ export async function resolveTectonicBinary(): Promise<string | null> {
   if (systemBinary) return systemBinary;
 
   // 2. Bundled binary — copy to /tmp so we can ensure +x on Lambda/Vercel
-  const bundled = getBundledBinaryPath();
-  if (!existsSync(bundled)) return null;
+  const bundled = getBundledBinaryCandidates().find((candidate) => existsSync(candidate));
+  if (!bundled) return null;
 
   // Re-use already-prepared binary on warm container
   if (existsSync(TMP_BINARY)) return TMP_BINARY;
@@ -71,7 +74,6 @@ export async function runTectonic(opts: {
     '--outdir', tmpDir,
     '--keep-logs',
     '--keep-intermediates',
-    '--chatter', 'minimal',
     'main.tex',
   ];
 

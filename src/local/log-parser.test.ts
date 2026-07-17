@@ -1,6 +1,71 @@
 import { describe, it, expect } from 'vitest';
 import { parseLog, needsRerun, needsBibliography } from './log-parser.js';
 
+const NESTED_FILE_ERROR_LOG = `
+This is pdfTeX, Version 3.141592653-2.6-1.40.24 (TeX Live 2022)
+(./main.tex
+LaTeX2e <2022-11-01> patch level 1
+(./chapter1.tex
+! Undefined control sequence.
+l.10 \\notacommand
+                  {}
+)
+)
+`;
+
+const MULTIPLE_ERRORS_LOG = `
+(./main.tex
+! Undefined control sequence.
+l.3 \\foo
+! Missing $ inserted.
+<inserted text>
+                $
+l.7 x = y
+`;
+
+const PACKAGE_WARNING_LOG = `
+(./main.tex
+Package hyperref Warning: Token not allowed in a PDF string on input line 4.
+)
+`;
+
+const FONT_WARNING_LOG = `
+(./main.tex
+LaTeX Font Warning: Font shape \`OT1/cmr/m/n' undefined
+)
+`;
+
+const MULTIPLY_DEFINED_LOG = `
+(./main.tex
+LaTeX Warning: Label \`sec:intro' multiply defined.
+)
+`;
+
+const UNDEFINED_CITATION_LOG = `
+(./main.tex
+LaTeX Warning: Citation \`smith2023' on page 1 undefined on input line 9.
+)
+`;
+
+const GENERIC_LATEX_WARNING_LOG = `
+(./main.tex
+LaTeX Warning: Something vague happened.
+)
+`;
+
+const UNDERFULL_HBOX_LOG = `
+(./main.tex
+Underfull \\hbox (badness 10000) in paragraph at lines 30--31
+)
+`;
+
+const VBOX_LOG = `
+(./main.tex
+Overfull \\vbox (3.0pt too high) detected at line 5
+Underfull \\vbox (badness 10000) detected at line 6
+)
+`;
+
 // Realistic TeX log snippets
 const SIMPLE_ERROR_LOG = `
 This is pdfTeX, Version 3.141592653-2.6-1.40.24 (TeX Live 2022)
@@ -134,5 +199,143 @@ I found no \\bibstyle command---while reading file main.aux
     expect(warnings.length).toBeGreaterThanOrEqual(1);
     expect(warnings[0]?.message).toContain('missing journal');
     expect(errors).toHaveLength(0);
+  });
+
+  it('parses bibtex errors with file/line location', () => {
+    const log = `This is BibTeX, Version 0.99d\nerror message--line 12 of file main.bib\n`;
+    const { errors } = parseLog(log, 'bibtex');
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.line).toBe(12);
+    expect(errors[0]?.file).toBe('main.bib');
+    expect(errors[0]?.source).toBe('bibtex');
+  });
+});
+
+describe('parseLog - biber', () => {
+  it('detects biber errors', () => {
+    const log = `2023-01-01 ERROR - Cannot find 'refs.bib'!\n`;
+    const { errors } = parseLog(log, 'biber');
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.source).toBe('biber');
+  });
+
+  it('detects biber warnings', () => {
+    const log = `2023-01-01 WARN - No citekeys found\n`;
+    const { warnings } = parseLog(log, 'biber');
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]?.code).toBe('other');
+  });
+
+  it('returns nothing for clean biber log', () => {
+    const log = `2023-01-01 INFO - Reference section 0\n`;
+    const { errors, warnings } = parseLog(log, 'biber');
+    expect(errors).toHaveLength(0);
+    expect(warnings).toHaveLength(0);
+  });
+});
+
+describe('parseLog - file tracking', () => {
+  it('attributes an error to the innermost open file', () => {
+    const { errors } = parseLog(NESTED_FILE_ERROR_LOG);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.file).toBe('./chapter1.tex');
+  });
+
+  it('attributes top-level errors to main.tex', () => {
+    const { errors } = parseLog(MULTIPLE_ERRORS_LOG);
+    expect(errors[0]?.file).toBe('./main.tex');
+  });
+});
+
+describe('parseLog - multiple errors', () => {
+  it('captures every error in a log with several failures', () => {
+    const { errors } = parseLog(MULTIPLE_ERRORS_LOG);
+    expect(errors).toHaveLength(2);
+    expect(errors[0]?.message).toContain('Undefined control sequence');
+    expect(errors[0]?.line).toBe(3);
+    expect(errors[1]?.message).toBe('Missing $ inserted.');
+    expect(errors[1]?.line).toBe(7);
+  });
+});
+
+describe('parseLog - warning pattern coverage', () => {
+  it('detects package warnings', () => {
+    const { warnings } = parseLog(PACKAGE_WARNING_LOG);
+    expect(warnings.some((w) => w.code === 'package-warning')).toBe(true);
+  });
+
+  it('detects font warnings', () => {
+    const { warnings } = parseLog(FONT_WARNING_LOG);
+    expect(warnings.some((w) => w.code === 'font-warning')).toBe(true);
+  });
+
+  it('detects multiply-defined label warnings', () => {
+    const { warnings } = parseLog(MULTIPLY_DEFINED_LOG);
+    expect(warnings.some((w) => w.code === 'multiply-defined-label')).toBe(true);
+  });
+
+  it('detects undefined citation warnings with line number', () => {
+    const { warnings } = parseLog(UNDEFINED_CITATION_LOG);
+    const w = warnings.find((w) => w.code === 'undefined-citation');
+    expect(w).toBeDefined();
+    expect(w?.line).toBe(9);
+  });
+
+  it('falls back to "other" for generic LaTeX warnings', () => {
+    const { warnings } = parseLog(GENERIC_LATEX_WARNING_LOG);
+    expect(warnings.some((w) => w.code === 'other')).toBe(true);
+  });
+
+  it('detects underfull hbox with line number', () => {
+    const { warnings } = parseLog(UNDERFULL_HBOX_LOG);
+    const w = warnings.find((w) => w.code === 'underfull-hbox');
+    expect(w).toBeDefined();
+    expect(w?.line).toBe(30);
+  });
+
+  it('detects overfull and underfull vbox warnings', () => {
+    const { warnings } = parseLog(VBOX_LOG);
+    expect(warnings.some((w) => w.code === 'overfull-vbox')).toBe(true);
+    expect(warnings.some((w) => w.code === 'underfull-vbox')).toBe(true);
+  });
+});
+
+describe('parseLog - line unwrapping', () => {
+  it('rejoins a message split across the 79-column TeX wrap boundary', () => {
+    const first = 'x'.repeat(79);
+    const log = `! ${first}\nsecond part of the message\nl.5 foo`;
+    const { errors } = parseLog(log);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.message).toBe(`${first}second part of the message`);
+  });
+});
+
+describe('needsRerun - additional patterns', () => {
+  it('detects natbib rerun warning', () => {
+    expect(needsRerun('Package natbib Warning: Citation(s) may have changed. Rerun')).toBe(true);
+  });
+
+  it('detects rerunfilecheck warning', () => {
+    expect(needsRerun('Package rerunfilecheck Warning: File `main.out\' has changed.')).toBe(true);
+  });
+
+  it('detects longtable rerun warning', () => {
+    expect(needsRerun('Package longtable Warning: Table widths have changed. Rerun LaTeX.')).toBe(true);
+  });
+
+  it('returns false for an empty log', () => {
+    expect(needsRerun('')).toBe(false);
+  });
+});
+
+describe('needsBibliography - additional cases', () => {
+  it('returns false when aux has only \\bibdata', () => {
+    const aux = '\\bibdata{refs}\n';
+    expect(needsBibliography(aux)).toBe(false);
+  });
+
+  it('returns true regardless of key ordering in the aux file', () => {
+    const aux = '\\bibdata{refs}\n\\citation{smith2023}\n';
+    expect(needsBibliography(aux)).toBe(true);
   });
 });
