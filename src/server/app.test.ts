@@ -1,9 +1,9 @@
-import { describe, it, expect } from 'vitest';
 import { readFile } from 'node:fs/promises';
-import { join, dirname } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createApp } from './app.js';
+import { describe, expect, it } from 'vitest';
 import type { CompileResponse } from '../types.js';
+import { createApp } from './app.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FIXTURES = join(__dirname, '..', '..', 'test', 'fixtures', 'tex');
@@ -87,50 +87,70 @@ describe('POST /compile - validation', () => {
 });
 
 describe('POST /compile - real compilation', () => {
-  it('compiles a minimal document and returns a base64 PDF', async () => {
-    const app = createApp();
-    const source = await readFixture('minimal.tex');
-    const res = await postCompile(app, { source });
+  it(
+    'compiles a minimal document and returns a base64 PDF',
+    async () => {
+      const app = createApp();
+      const source = await readFixture('minimal.tex');
+      const res = await postCompile(app, { source });
 
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as CompileResponse;
-    expect(body.pdf).not.toBeNull();
-    expect(Buffer.from(body.pdf as string, 'base64').subarray(0, 5).toString()).toBe('%PDF-');
-    expect(body.errors).toHaveLength(0);
-  }, TIMEOUT);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as CompileResponse;
+      expect(body.pdf).not.toBeNull();
+      expect(
+        Buffer.from(body.pdf as string, 'base64')
+          .subarray(0, 5)
+          .toString(),
+      ).toBe('%PDF-');
+      expect(body.errors).toHaveLength(0);
+    },
+    TIMEOUT,
+  );
 
-  it('applies schema defaults when optional fields are omitted', async () => {
-    const app = createApp();
-    const source = await readFixture('minimal.tex');
-    const res = await postCompile(app, { source });
+  it(
+    'applies schema defaults when optional fields are omitted',
+    async () => {
+      const app = createApp();
+      const source = await readFixture('minimal.tex');
+      const res = await postCompile(app, { source });
 
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as CompileResponse;
-    expect(body.pdf).not.toBeNull();
-  }, TIMEOUT);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as CompileResponse;
+      expect(body.pdf).not.toBeNull();
+    },
+    TIMEOUT,
+  );
 
-  it('returns errors and a null pdf for a broken document', async () => {
-    const app = createApp();
-    const source = await readFixture('syntax-error.tex');
-    const res = await postCompile(app, { source });
+  it(
+    'returns errors and a null pdf for a broken document',
+    async () => {
+      const app = createApp();
+      const source = await readFixture('syntax-error.tex');
+      const res = await postCompile(app, { source });
 
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as CompileResponse;
-    expect(body.pdf).toBeNull();
-    expect(body.errors.length).toBeGreaterThanOrEqual(1);
-  }, TIMEOUT);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as CompileResponse;
+      expect(body.pdf).toBeNull();
+      expect(body.errors.length).toBeGreaterThanOrEqual(1);
+    },
+    TIMEOUT,
+  );
 
-  it('decodes base64-supplied files and includes them in compilation', async () => {
-    const app = createApp();
-    const source = await readFixture('with-image.tex');
-    const image = await readFile(join(FIXTURES, 'figure.png'));
-    const res = await postCompile(app, {
-      source,
-      files: { 'figure.png': image.toString('base64') },
-    });
+  it(
+    'decodes base64-supplied files and includes them in compilation',
+    async () => {
+      const app = createApp();
+      const source = await readFixture('with-image.tex');
+      const image = await readFile(join(FIXTURES, 'figure.png'));
+      const res = await postCompile(app, {
+        source,
+        files: { 'figure.png': image.toString('base64') },
+      });
 
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as CompileResponse;
-    expect(body.pdf).not.toBeNull();
-  }, TIMEOUT);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as CompileResponse;
+      expect(body.pdf).not.toBeNull();
+    },
+    TIMEOUT,
+  );
 });

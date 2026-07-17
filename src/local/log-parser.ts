@@ -23,10 +23,11 @@ function buildFileStack(log: string): Map<number, string | null> {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i] ?? '';
 
-    let match: RegExpExecArray | null;
     FILE_OPEN.lastIndex = 0;
-    while ((match = FILE_OPEN.exec(line)) !== null) {
+    let match = FILE_OPEN.exec(line);
+    while (match !== null) {
       stack.push(match[1] as string);
+      match = FILE_OPEN.exec(line);
     }
 
     lineFiles.set(i, stack[stack.length - 1] ?? null);
@@ -43,7 +44,10 @@ function buildFileStack(log: string): Map<number, string | null> {
   return lineFiles;
 }
 
-export function parseLog(log: string, source: 'latex' | 'bibtex' | 'biber' = 'latex'): {
+export function parseLog(
+  log: string,
+  source: 'latex' | 'bibtex' | 'biber' = 'latex',
+): {
   errors: LatexError[];
   warnings: LatexWarning[];
 } {
@@ -253,9 +257,4 @@ export function needsRerun(log: string): boolean {
   ];
 
   return RERUN_PATTERNS.some((re) => re.test(log));
-}
-
-/** Check if a .aux file indicates bibliography compilation is needed */
-export function needsBibliography(auxContent: string): boolean {
-  return /\\citation\{/.test(auxContent) && /\\bibdata\{/.test(auxContent);
 }

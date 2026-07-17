@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
-import { callRemote } from './client.js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CompileResponse } from '../types.js';
+import { callRemote } from './client.js';
 
 function jsonResponse(body: CompileResponse, init: { status?: number } = {}): Response {
   return new Response(JSON.stringify(body), {
@@ -31,11 +31,13 @@ describe('callRemote', () => {
     });
 
     expect(capturedUrl).toBe('http://localhost:3001/compile');
-    expect(capturedBody['engine']).toBe('pdflatex');
-    expect(capturedBody['passes']).toBe('auto');
-    expect(capturedBody['bibliography']).toBe('bibtex');
-    expect(capturedBody['timeout']).toBe(30_000);
-    expect(capturedBody['files']).toEqual({ 'refs.bib': Buffer.from('bib content').toString('base64') });
+    expect(capturedBody.engine).toBe('pdflatex');
+    expect(capturedBody.passes).toBe('auto');
+    expect(capturedBody.bibliography).toBe('bibtex');
+    expect(capturedBody.timeout).toBe(30_000);
+    expect(capturedBody.files).toEqual({
+      'refs.bib': Buffer.from('bib content').toString('base64'),
+    });
   });
 
   it('forwards explicit options in the request body', async () => {
@@ -56,10 +58,10 @@ describe('callRemote', () => {
       timeout: 5_000,
     });
 
-    expect(capturedBody['engine']).toBe('xelatex');
-    expect(capturedBody['passes']).toBe(2);
-    expect(capturedBody['bibliography']).toBe('biber');
-    expect(capturedBody['timeout']).toBe(5_000);
+    expect(capturedBody.engine).toBe('xelatex');
+    expect(capturedBody.passes).toBe(2);
+    expect(capturedBody.bibliography).toBe('biber');
+    expect(capturedBody.timeout).toBe(5_000);
   });
 
   it('decodes a base64 PDF from the response into a Buffer', async () => {
@@ -80,11 +82,23 @@ describe('callRemote', () => {
   it('passes through a null PDF, errors, warnings, and logs unmodified', async () => {
     const response: CompileResponse = {
       pdf: null,
-      errors: [{ type: 'error', file: 'main.tex', line: 3, message: 'boom', context: null, source: 'latex' }],
+      errors: [
+        {
+          type: 'error',
+          file: 'main.tex',
+          line: 3,
+          message: 'boom',
+          context: null,
+          source: 'latex',
+        },
+      ],
       warnings: [{ type: 'warning', code: 'other', file: null, line: null, message: 'careful' }],
       logs: [{ passNumber: 1, engine: 'pdflatex', stdout: '', stderr: '', log: '', exitCode: 1 }],
     };
-    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse(response)));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => jsonResponse(response)),
+    );
 
     const result = await callRemote('src', { serviceUrl: 'http://localhost:3001' });
 

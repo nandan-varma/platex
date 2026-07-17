@@ -3,11 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Engine, RawPassLog } from '../types.js';
 
-const LATEX_FLAGS = [
-  '-interaction=nonstopmode',
-  '-halt-on-error',
-  '-file-line-error',
-];
+const LATEX_FLAGS = ['-interaction=nonstopmode', '-halt-on-error', '-file-line-error'];
 
 export interface RunEngineOptions {
   engine: Engine;
@@ -19,11 +15,7 @@ export interface RunEngineOptions {
 export async function runEngine(opts: RunEngineOptions): Promise<RawPassLog> {
   const { engine, tmpDir, passNumber, timeout } = opts;
 
-  const args = [
-    ...LATEX_FLAGS,
-    `-output-directory=${tmpDir}`,
-    'main.tex',
-  ];
+  const args = [...LATEX_FLAGS, `-output-directory=${tmpDir}`, 'main.tex'];
 
   const { stdout, stderr, exitCode } = await spawnProcess(engine, args, tmpDir, timeout);
 
@@ -49,6 +41,7 @@ export function spawnProcess(
   args: string[],
   cwd: string,
   timeout: number,
+  env?: NodeJS.ProcessEnv,
 ): Promise<SpawnResult> {
   return new Promise((resolve) => {
     const stdoutChunks: Buffer[] = [];
@@ -58,13 +51,14 @@ export function spawnProcess(
       cwd,
       // Don't inherit full env — strip anything sensitive, add TeX restrictions
       env: {
-        PATH: process.env['PATH'],
-        HOME: process.env['HOME'],
-        TMPDIR: process.env['TMPDIR'],
+        PATH: process.env.PATH,
+        HOME: process.env.HOME,
+        TMPDIR: process.env.TMPDIR,
         // Paranoid output restriction: prevents \write from escaping tmpDir
         openout_any: 'p',
         // Restrict file reads to the current dir and its descendants
         openin_any: 'a',
+        ...env,
       },
     });
 

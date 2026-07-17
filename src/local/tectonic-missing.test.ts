@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Isolated in its own file: forces existsSync to always report false, so we
 // can exercise the "no system tectonic and no bundled binary" branch without
@@ -9,14 +9,14 @@ vi.mock('node:fs', async (importOriginal) => {
 });
 
 describe('resolveTectonicBinary - no binary available', () => {
-  const originalPath = process.env['PATH'];
+  const originalPath = process.env.PATH;
 
   afterEach(() => {
-    process.env['PATH'] = originalPath;
+    process.env.PATH = originalPath;
   });
 
   it('returns null when neither a system nor bundled tectonic binary exists', async () => {
-    process.env['PATH'] = '/usr/bin:/bin';
+    process.env.PATH = '/usr/bin:/bin';
     const { resolveTectonicBinary } = await import('./tectonic.js');
     const resolved = await resolveTectonicBinary();
     expect(resolved).toBeNull();

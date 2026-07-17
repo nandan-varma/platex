@@ -1,12 +1,20 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, rm, writeFile, readFile } from 'node:fs/promises';
-import { join, dirname } from 'node:path';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { runBibliography, detectBibliography } from './bibtex.js';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { detectBibliography, runBibliography } from './bibtex.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const FAKE_BIBTEX = join(__dirname, '..', '..', 'test', 'fixtures', 'fake-engines', 'fake-bibtex.mjs');
+const FAKE_BIBTEX = join(
+  __dirname,
+  '..',
+  '..',
+  'test',
+  'fixtures',
+  'fake-engines',
+  'fake-bibtex.mjs',
+);
 
 describe('detectBibliography', () => {
   let tmpDir: string;
@@ -46,7 +54,12 @@ describe('runBibliography', () => {
   });
 
   it('returns null immediately when bibEngine is "none"', async () => {
-    const result = await runBibliography({ bibEngine: 'none', tmpDir, passNumber: 2, timeout: 5_000 });
+    const result = await runBibliography({
+      bibEngine: 'none',
+      tmpDir,
+      passNumber: 2,
+      timeout: 5_000,
+    });
     expect(result).toBeNull();
   });
 
@@ -68,7 +81,11 @@ describe('runBibliography', () => {
   });
 
   it('surfaces a non-zero exit code on bibliography failure', async () => {
-    await writeFile(join(tmpDir, 'main.aux'), 'BIB_ERROR\n\\citation{x}\n\\bibdata{refs}\n', 'utf-8');
+    await writeFile(
+      join(tmpDir, 'main.aux'),
+      'BIB_ERROR\n\\citation{x}\n\\bibdata{refs}\n',
+      'utf-8',
+    );
 
     const result = await runBibliography({
       bibEngine: FAKE_BIBTEX as never,
@@ -88,12 +105,16 @@ describe('runBibliography', () => {
     await writeFile(join(tmpDir, 'main.aux'), '', 'utf-8');
     const binDir = await mkdtemp(join(tmpdir(), 'platex-fakebin-'));
     const fakeBibtexPath = join(binDir, 'bibtex');
-    await writeFile(fakeBibtexPath, "#!/usr/bin/env node\nconsole.log(JSON.stringify(process.argv.slice(2)));\n", 'utf-8');
+    await writeFile(
+      fakeBibtexPath,
+      '#!/usr/bin/env node\nconsole.log(JSON.stringify(process.argv.slice(2)));\n',
+      'utf-8',
+    );
     const { chmod } = await import('node:fs/promises');
     await chmod(fakeBibtexPath, 0o755);
 
-    const originalPath = process.env['PATH'];
-    process.env['PATH'] = `${binDir}:${originalPath}`;
+    const originalPath = process.env.PATH;
+    process.env.PATH = `${binDir}:${originalPath}`;
     try {
       const result = await runBibliography({
         bibEngine: 'bibtex',
@@ -104,7 +125,7 @@ describe('runBibliography', () => {
       const args = JSON.parse(result?.stdout ?? '[]');
       expect(args).toEqual(['main']);
     } finally {
-      process.env['PATH'] = originalPath;
+      process.env.PATH = originalPath;
       await rm(binDir, { recursive: true, force: true });
     }
   });

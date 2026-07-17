@@ -16,9 +16,10 @@ export async function runBibliography(opts: {
   const engine = bibEngine; // 'bibtex' | 'biber'
 
   // bibtex takes the .aux basename (no extension, no path for bibtex; full path for biber)
-  const args = bibEngine === 'bibtex'
-    ? ['main']
-    : ['--input-directory', tmpDir, '--output-directory', tmpDir, 'main'];
+  const args =
+    bibEngine === 'bibtex'
+      ? ['main']
+      : ['--input-directory', tmpDir, '--output-directory', tmpDir, 'main'];
 
   const { stdout, stderr, exitCode } = await spawnProcess(engine, args, tmpDir, timeout);
 
