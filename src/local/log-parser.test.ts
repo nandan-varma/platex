@@ -313,3 +313,57 @@ describe('needsRerun - additional patterns', () => {
     expect(needsRerun('')).toBe(false);
   });
 });
+
+describe('parseLog - file tracking edge cases', () => {
+  const FALSE_POSITIVE_LOG = `
+(./main.tex
+! Undefined control sequence.
+l.10 \\notacommand
+                   {}
+)
+`;
+
+  const DEEP_NESTING_LOG = `
+(./main.tex
+(./chapter1.tex
+(./section1.tex
+! Error in section.
+l.5 \\badcmd
+)
+)
+)
+`;
+
+  const SAME_LINE_OPEN_CLOSE_LOG = `
+(./main.tex
+(./chapter1.tex (./inline.tex) some text here
+! Error in chapter.
+l.3 \\badcmd
+)
+`;
+
+  it('does not treat l.N lines with ./ in the command as file opens', () => {
+    const { errors } = parseLog(FALSE_POSITIVE_LOG);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.file).toBe('./main.tex');
+  });
+
+  it('tracks three levels of nested file opens correctly', () => {
+    const { errors } = parseLog(DEEP_NESTING_LOG);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.file).toBe('./section1.tex');
+  });
+
+  it('handles files opened and closed on the same line', () => {
+    const { errors } = parseLog(SAME_LINE_OPEN_CLOSE_LOG);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.file).toBe('./chapter1.tex');
+  });
+
+  it('attributes an error to main.tex when no files are open', () => {
+    const log = `! Error at top level.\nl.3 \\badcmd\n`;
+    const { errors } = parseLog(log);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.file).toBeNull();
+  });
+});

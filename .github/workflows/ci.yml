@@ -24,6 +24,8 @@ jobs:
 
       - run: npm run typecheck
 
+      - run: npm run lint
+
       # The test suite compiles real LaTeX via a bundled Tectonic binary
       # (gitignored, not committed) rather than mocking compilation.
       - name: Cache Tectonic binary

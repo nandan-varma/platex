@@ -49,16 +49,15 @@ export function spawnProcess(
 
     const child = spawn(command, args, {
       cwd,
-      // Don't inherit full env — strip anything sensitive, add TeX restrictions
+      // Don't inherit full env — strip anything sensitive, add TeX restrictions.
+      // Security-critical flags go AFTER the spread so callers cannot override them.
       env: {
         PATH: process.env.PATH,
         HOME: process.env.HOME,
         TMPDIR: process.env.TMPDIR,
-        // Paranoid output restriction: prevents \write from escaping tmpDir
-        openout_any: 'p',
-        // Restrict file reads to the current dir and its descendants
-        openin_any: 'a',
         ...env,
+        openout_any: 'p',
+        openin_any: 'a',
       },
     });
 

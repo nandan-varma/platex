@@ -30,6 +30,11 @@ describe('compile() - input validation', () => {
     // @ts-expect-error intentionally omitting the required argument
     await expect(compile()).rejects.toThrow(TypeError);
   });
+
+  it('throws a TypeError when source exceeds the 5MB byte limit', async () => {
+    const large = 'x'.repeat(5_000_001);
+    await expect(compile(large)).rejects.toThrow(TypeError);
+  });
 });
 
 describe('compile() - local pipeline routing', () => {

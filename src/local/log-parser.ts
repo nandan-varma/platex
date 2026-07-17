@@ -18,24 +18,30 @@ function buildFileStack(log: string): Map<number, string | null> {
   const stack: string[] = [];
   const lines = log.split('\n');
 
-  const FILE_OPEN = /\(([./][^\s()]*\.(?:tex|sty|cls|def|cfg|fd|bbl))/g;
+  const FILE_OPEN = /\(((?:\.\.?\/)[^\s)]+\.(tex|sty|cls|def|cfg|fd|bbl))/g;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i] ?? '';
 
     FILE_OPEN.lastIndex = 0;
+    const lineOpens: RegExpExecArray[] = [];
     let match = FILE_OPEN.exec(line);
     while (match !== null) {
-      stack.push(match[1] as string);
+      lineOpens.push(match);
       match = FILE_OPEN.exec(line);
+    }
+
+    // Push opens onto the stack
+    for (const m of lineOpens) {
+      stack.push(m[1] as string);
     }
 
     lineFiles.set(i, stack[stack.length - 1] ?? null);
 
-    // Count closing parens that aren't part of a number or other expression
-    const closes = (line.match(/\)/g) ?? []).length;
-    const opens = (line.match(/\([./]/g) ?? []).length;
-    const pops = closes - opens;
+    // Pop: only the last N closing parens on this line close files opened on
+    // this line; earlier closing parens belong to TeX expressions, not files.
+    const lineCloses = line.split(')').length - 1;
+    const pops = Math.min(lineCloses, lineOpens.length);
     for (let p = 0; p < pops; p++) {
       stack.pop();
     }
