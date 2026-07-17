@@ -163,9 +163,11 @@ describe('runCli compilation (real Tectonic)', () => {
         logs: unknown[];
       };
       expect(payload.pdf).not.toBeNull();
-      expect(Buffer.from(payload.pdf as string, 'base64').subarray(0, 5).toString('utf-8')).toBe(
-        '%PDF-',
-      );
+      expect(
+        Buffer.from(payload.pdf as string, 'base64')
+          .subarray(0, 5)
+          .toString('utf-8'),
+      ).toBe('%PDF-');
       expect(payload.errors).toHaveLength(0);
       expect(payload.logs.length).toBeGreaterThanOrEqual(1);
 
