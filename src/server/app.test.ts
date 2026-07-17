@@ -234,6 +234,61 @@ describe('POST /compile - client disconnect cancellation', () => {
   });
 });
 
+describe('createApp(config) — programmatic configuration (no env vars)', () => {
+  it('accepts an apiKey via config, independent of PLATEX_API_KEY', async () => {
+    const app = createApp({ apiKey: 'config-key' });
+
+    const unauthed = await postCompile(app, { source: 'x' });
+    expect(unauthed.status).toBe(401);
+
+    const authed = await app.request('/compile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer config-key' },
+      body: JSON.stringify({ source: '' }), // invalid body, but proves auth passed (400 not 401)
+    });
+    expect(authed.status).toBe(400);
+  });
+
+  it('accepts maxConcurrentCompiles via config, independent of PLATEX_MAX_CONCURRENT', async () => {
+    const app = createApp({ maxConcurrentCompiles: 0 });
+    const source = await readFixture('minimal.tex');
+    const res = await postCompile(app, { source });
+    expect(res.status).toBe(503);
+  });
+
+  it('accepts a smaller maxSourceBytes via limits, rejecting sources the built-in default would allow', async () => {
+    const app = createApp({ limits: { maxSourceBytes: 10 } });
+    const res = await postCompile(app, { source: 'this is definitely more than 10 bytes' });
+    expect(res.status).toBe(400);
+  });
+
+  it('accepts a smaller maxFilesCount via limits', async () => {
+    const app = createApp({ limits: { maxFilesCount: 1 } });
+    const res = await postCompile(app, {
+      source: 'x',
+      files: {
+        'a.txt': Buffer.from('a').toString('base64'),
+        'b.txt': Buffer.from('b').toString('base64'),
+      },
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it('keeps concurrency state isolated between independent createApp() instances', async () => {
+    const busyApp = createApp({ maxConcurrentCompiles: 0 });
+    const normalApp = createApp(); // default maxConcurrentCompiles (4) via a fresh instance
+
+    const busyRes = await postCompile(busyApp, { source: 'x' });
+    expect(busyRes.status).toBe(503);
+
+    // If the concurrency counter were still a shared module singleton, this
+    // second, independently-configured app could incorrectly inherit the
+    // first app's "busy" state.
+    const normalRes = await postCompile(normalApp, { source: '' }); // invalid body -> 400, not 503
+    expect(normalRes.status).toBe(400);
+  });
+});
+
 describe('bearer auth (PLATEX_API_KEY)', () => {
   afterEach(() => {
     delete process.env.PLATEX_API_KEY;

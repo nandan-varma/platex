@@ -35,6 +35,11 @@ describe('compile() - input validation', () => {
     const large = 'x'.repeat(5_000_001);
     await expect(compile(large)).rejects.toThrow(TypeError);
   });
+
+  it('honors a per-call limits.maxSourceBytes override instead of the hardcoded 5MB default', async () => {
+    const source = 'x'.repeat(1_000);
+    await expect(compile(source, { limits: { maxSourceBytes: 10 } })).rejects.toThrow(TypeError);
+  });
 });
 
 describe('compile() - local pipeline routing', () => {
@@ -103,6 +108,25 @@ describe('compile() - remote routing (full HTTP round trip)', () => {
           serviceUrl: 'http://localhost:1',
         }),
       ).rejects.toThrow(/platex: failed to reach service/);
+    },
+    TIMEOUT,
+  );
+
+  it(
+    'routes remotely from PLATEX_SERVICE_URL when serviceUrl is not passed explicitly',
+    async () => {
+      const originalUrl = process.env.PLATEX_SERVICE_URL;
+      process.env.PLATEX_SERVICE_URL = baseUrl;
+      try {
+        const source = await readFixture('minimal.tex');
+        const result = await compile(source);
+
+        expect(result.pdf).not.toBeNull();
+        expect(result.pdf?.subarray(0, 5).toString()).toBe('%PDF-');
+      } finally {
+        if (originalUrl === undefined) delete process.env.PLATEX_SERVICE_URL;
+        else process.env.PLATEX_SERVICE_URL = originalUrl;
+      }
     },
     TIMEOUT,
   );

@@ -139,4 +139,33 @@ describe('runLocalPipeline (real Tectonic compilation)', () => {
       runLocalPipeline('clean document', { files: { 'a.bin': big, 'b.bin': big } }),
     ).rejects.toThrow(TypeError);
   });
+
+  it('honors a smaller per-call limits.maxFilesCount override, rejecting files the default would allow', async () => {
+    await expect(
+      runLocalPipeline('clean document', {
+        files: { 'a.txt': Buffer.from('a'), 'b.txt': Buffer.from('b') },
+        limits: { maxFilesCount: 1 },
+      }),
+    ).rejects.toThrow(TypeError);
+  });
+
+  it(
+    'honors a larger per-call limits.maxTotalFilesBytes override, allowing files the default would reject',
+    async () => {
+      // 30MB combined — over the 25MB default budget, but under a raised one.
+      const oneFile = Buffer.alloc(15_000_000);
+      const source = await readFixture('minimal.tex');
+
+      await expect(
+        runLocalPipeline(source, { files: { 'a.bin': oneFile, 'b.bin': oneFile } }),
+      ).rejects.toThrow(TypeError);
+
+      const result = await runLocalPipeline(source, {
+        files: { 'a.bin': oneFile, 'b.bin': oneFile },
+        limits: { maxTotalFilesBytes: 50_000_000 },
+      });
+      expect(result.pdf).not.toBeNull();
+    },
+    TIMEOUT,
+  );
 });

@@ -6,8 +6,7 @@ import {
   DEFAULT_ENGINE,
   DEFAULT_PASSES,
   DEFAULT_TIMEOUT,
-  MAX_FILES_COUNT,
-  MAX_TOTAL_FILES_BYTES,
+  resolveLimits,
 } from '../defaults.js';
 import type { CompileOptions, CompileResult } from '../types.js';
 import { parseLog } from './log-parser.js';
@@ -25,14 +24,15 @@ export async function runLocalPipeline(
   const timeout = options.timeout ?? DEFAULT_TIMEOUT;
   const signal = options.signal;
   const files = options.files ?? {};
+  const limits = resolveLimits(options.limits);
 
   const fileEntries = Object.entries(files);
-  if (fileEntries.length > MAX_FILES_COUNT) {
-    throw new TypeError(`platex: too many files (max ${MAX_FILES_COUNT})`);
+  if (fileEntries.length > limits.maxFilesCount) {
+    throw new TypeError(`platex: too many files (max ${limits.maxFilesCount})`);
   }
   const totalFilesBytes = fileEntries.reduce((sum, [, buf]) => sum + buf.length, 0);
-  if (totalFilesBytes > MAX_TOTAL_FILES_BYTES) {
-    throw new TypeError(`platex: total files size exceeds ${MAX_TOTAL_FILES_BYTES} bytes`);
+  if (totalFilesBytes > limits.maxTotalFilesBytes) {
+    throw new TypeError(`platex: total files size exceeds ${limits.maxTotalFilesBytes} bytes`);
   }
 
   const tmpDir = await mkdtemp(join(tmpdir(), 'platex-'));
