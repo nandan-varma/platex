@@ -15,7 +15,7 @@ Returns a Promise resolving to a `CompileResult`.
 | Option | Type | Default | Description |
 | --- | --- | --- | --- |
 | `engine` | `'pdflatex' \| 'xelatex' \| 'lualatex'` | `'pdflatex'` | Used when system TeX is available; Tectonic is always XeTeX-based. |
-| `passes` | `'auto' \| 1 \| 2 \| 3` | `'auto'` | `'auto'` reruns until stable, same as Overleaf. |
+| `passes` | `'auto' \| 1 \| 2 \| 3` | `'auto'` | `'auto'` reruns until output is stable. |
 | `bibliography` | `'bibtex' \| 'biber' \| 'none'` | `'bibtex'` | Bibliography engine. |
 | `files` | `Record<string, Buffer>` | `{}` | Additional files: `.bib`, images, included `.tex` files. |
 | `serviceUrl` | `string` | — | URL of the platex service. If unset, compiles locally. |

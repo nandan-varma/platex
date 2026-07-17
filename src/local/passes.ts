@@ -11,7 +11,7 @@ import { needsRerun, parseLog } from './log-parser.js';
 
 /**
  * Run the full LaTeX compilation pipeline for a document already written to tmpDir.
- * Mirrors Overleaf's CLSI multi-pass logic exactly.
+ * Implements standard TeX multi-pass logic (LaTeX → bibliography → reruns until stable).
  *
  * `timeout` is an overall wall-clock budget for the *entire* pipeline (all LaTeX
  * passes plus the bibliography pass combined), not a per-process allowance —

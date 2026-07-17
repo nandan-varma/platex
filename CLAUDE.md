@@ -44,7 +44,7 @@ src/
   local/
     index.ts               # runLocalPipeline — orchestrates local compilation
     compiler.ts             # spawnProcess — low-level child process wrapper (timeout + AbortSignal support)
-    passes.ts               # runPasses — multi-pass TeX compilation (mirrors Overleaf CLSI), deadline-budgeted
+    passes.ts               # runPasses — multi-pass TeX compilation (standard LaTeX→bib→rerun logic), deadline-budgeted
     bibtex.ts                # runBibliography, detectBibliography
     log-parser.ts            # parseLog, needsRerun — TeX log parsing
     tectonic.ts               # resolveTectonicBinary, runTectonic — Tectonic engine support

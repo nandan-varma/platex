@@ -49,8 +49,7 @@ The library auto-selects an engine — you don't configure this directly.
 
 ## Self-hosted (Docker, maximum accuracy)
 
-If you're not on Vercel, the Docker image uses full TeX Live — the same engine
-Overleaf runs:
+If you're not on Vercel, the Docker image uses full TeX Live:
 
 ```bash
 npm run build:server
