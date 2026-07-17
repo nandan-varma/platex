@@ -1,0 +1,71 @@
+---
+title: platex
+description: Compile LaTeX to PDF in TypeScript, built for Next.js.
+template: splash
+hero:
+  tagline: >-
+    Output as close to Overleaf as possible — a library that runs anywhere
+    Node.js runs, on Vercel or self-hosted.
+  actions:
+    - text: Get started
+      link: /installation/
+      icon: right-arrow
+    - text: API reference
+      link: /api-reference/
+      icon: open-book
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+## What it is
+
+`@nandan-varma/platex` compiles LaTeX to PDF from TypeScript. The entire public
+surface is one function — `compile()` — and every rendering pattern below calls
+it the same way.
+
+```bash
+npm install @nandan-varma/platex
+```
+
+```typescript
+import { compile } from '@nandan-varma/platex';
+
+const result = await compile(source, {
+  engine: 'pdflatex',
+  serviceUrl: process.env.PLATEX_SERVICE_URL,
+});
+
+if (result.pdf) {
+  // result.pdf is a Buffer
+}
+```
+
+<CardGrid>
+  <Card title="Overleaf-accurate output" icon="document">
+    Same engine flags, same multi-pass logic, same rerun heuristics as
+    Overleaf's CLSI.
+  </Card>
+  <Card title="Two deployment targets" icon="puzzle">
+    A remote service for Vercel (bundled Tectonic), or full TeX Live
+    locally / self-hosted.
+  </Card>
+  <Card title="Structured diagnostics" icon="list-format">
+    Errors and warnings parsed from raw TeX logs, with file, line, and
+    category.
+  </Card>
+  <Card title="Every rendering pattern" icon="seti:tsx">
+    Server Components, Client Components, Server Actions, and Route Handlers
+    all work the same way.
+  </Card>
+</CardGrid>
+
+## Rendering patterns
+
+The same `compile()` call works across every natural Next.js integration point.
+Each pattern has its own page with a complete code sample:
+
+- [Server Components](/rendering/ssr/) — `compile()` runs during the server render; the PDF ships in the initial HTML.
+- [Client Components](/rendering/csr/) — edit LaTeX in the browser and compile on demand via `fetch`.
+- [Server Actions](/rendering/server-actions/) — a form submits straight to a `'use server'` function.
+- [Route Handlers](/rendering/route-handlers/) — the raw Node.js API route backing the other patterns.

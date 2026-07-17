@@ -56,7 +56,6 @@
     "build:server": "tsup --config tsup.server.config.ts",
     "build:vercel": "node scripts/download-tectonic.mjs && tsup --config tsup.server.config.ts",
     "dev": "tsx src/server/index.ts",
-    "demo": "npm run build && npm --prefix examples/nextjs-demo install && npm --prefix examples/nextjs-demo run dev",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
