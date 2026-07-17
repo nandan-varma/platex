@@ -1,4 +1,6 @@
 import {
+  base64ToBytes,
+  bytesToBase64,
   DEFAULT_BIB,
   DEFAULT_ENGINE,
   DEFAULT_PASSES,
@@ -47,7 +49,7 @@ async function callRemoteOnce(
     bibliography: options.bibliography ?? DEFAULT_BIB,
     timeout,
     files: Object.fromEntries(
-      Object.entries(options.files ?? {}).map(([name, buf]) => [name, buf.toString('base64')]),
+      Object.entries(options.files ?? {}).map(([name, buf]) => [name, bytesToBase64(buf)]),
     ),
   };
 
@@ -97,10 +99,18 @@ async function callRemoteOnce(
     );
   }
 
-  const data: CompileResponse = (await response.json()) as CompileResponse;
+  let data: CompileResponse;
+  try {
+    data = (await response.json()) as CompileResponse;
+  } catch {
+    // An ok status with a non-JSON body means a broken proxy or server —
+    // classify it (retryable, like a 5xx) instead of leaking a raw SyntaxError
+    // that would bypass retry and the handler's 502 mapping.
+    throw new RemoteCompileError('platex: service returned an invalid response body', true);
+  }
 
   return {
-    pdf: data.pdf ? Buffer.from(data.pdf, 'base64') : null,
+    pdf: data.pdf ? base64ToBytes(data.pdf) : null,
     errors: data.errors,
     warnings: data.warnings,
     logs: data.logs,

@@ -12,6 +12,10 @@ services:
       # PLATEX_API_KEY: "change-me"
       # Max simultaneous compiles; tune alongside the cpus/memory limits below.
       # PLATEX_MAX_CONCURRENT: "4"
+      # Input-size ceilings — override the compiled-in defaults (5MB / 50 files / 25MB).
+      # PLATEX_MAX_SOURCE_BYTES: "5000000"
+      # PLATEX_MAX_FILES_COUNT: "50"
+      # PLATEX_MAX_TOTAL_FILES_BYTES: "25000000"
     restart: unless-stopped
     deploy:
       resources:

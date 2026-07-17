@@ -42,10 +42,14 @@ jobs:
 
       # `platex/client` must stay edge-safe: the built bundle may never pull
       # in a Node built-in (see tsup.config.ts and CONTRIBUTING.md).
-      - name: "Verify edge bundle has no node: imports"
+      - name: "Verify edge bundle has no node: imports or bare Buffer references"
         run: |
           if grep -nE "[\"']node:" dist/client.js dist/client.cjs; then
             echo "::error::dist/client.* imports Node built-ins — platex/client must stay edge-safe"
+            exit 1
+          fi
+          if grep -nE '\bBuffer\.' dist/client.js dist/client.cjs; then
+            echo "::error::dist/client.* references Buffer global directly — use the guarded _Buffer constant in defaults.ts instead"
             exit 1
           fi
 

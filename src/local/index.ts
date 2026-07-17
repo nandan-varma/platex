@@ -7,6 +7,7 @@ import {
   DEFAULT_PASSES,
   DEFAULT_TIMEOUT,
   resolveLimits,
+  utf8ByteLength,
 } from '../defaults.js';
 import type { CompileOptions, CompileResult } from '../types.js';
 import { parseLog } from './log-parser.js';
@@ -25,6 +26,13 @@ export async function runLocalPipeline(
   const signal = options.signal;
   const files = options.files ?? {};
   const limits = resolveLimits(options.limits);
+
+  // Enforced here, not just in compile() — the HTTP route calls this directly,
+  // and its Zod `.max()` counts UTF-16 code units, so without this check a
+  // multibyte source could exceed the byte limit the server operator set.
+  if (utf8ByteLength(source) > limits.maxSourceBytes) {
+    throw new TypeError(`platex: source exceeds ${limits.maxSourceBytes} byte limit`);
+  }
 
   const fileEntries = Object.entries(files);
   if (fileEntries.length > limits.maxFilesCount) {
@@ -55,8 +63,11 @@ export async function runLocalPipeline(
     // Overlap the engine-availability probe (a `which`/`where` subprocess) with
     // staging the working directory — they're independent — and write main.tex
     // plus every attachment in parallel instead of one blocking await each.
+    // `tectonic` never goes through the TeX Live multi-pass path (it rejects
+    // the pdflatex-style flags runEngine passes), so skip the probe and let
+    // resolveTectonicBinary below find it — system-installed or bundled.
     const [engineAvailable] = await Promise.all([
-      isEngineAvailable(engine),
+      engine === 'tectonic' ? false : isEngineAvailable(engine),
       (async () => {
         await Promise.all([...subDirs].map((dir) => mkdir(dir, { recursive: true })));
         await Promise.all([
@@ -76,7 +87,14 @@ export async function runLocalPipeline(
         signal,
       });
 
-      const pdf = await readPdf(join(tmpDir, 'main.pdf'));
+      // A non-zero exit from any LaTeX pass is fatal: whatever main.pdf exists
+      // is stale or truncated, and returning it would contradict the "pdf is
+      // null on fatal failure" contract. (bibtex exits 1 on mere warnings, so
+      // bibliography passes don't count.)
+      const fatal = logs.some(
+        (log) => log.engine !== 'bibtex' && log.engine !== 'biber' && log.exitCode !== 0,
+      );
+      const pdf = fatal ? null : await readPdf(join(tmpDir, 'main.pdf'));
       return { pdf, errors, warnings, logs };
     }
 
@@ -91,7 +109,7 @@ export async function runLocalPipeline(
 
     const rawLog = await runTectonic({ binary: tectonicBinary, tmpDir, timeout, signal });
     const { errors, warnings } = parseLog(rawLog.log, 'latex');
-    const pdf = await readPdf(join(tmpDir, 'main.pdf'));
+    const pdf = rawLog.exitCode !== 0 ? null : await readPdf(join(tmpDir, 'main.pdf'));
     return { pdf, errors, warnings, logs: [rawLog] };
   } finally {
     await rm(tmpDir, { recursive: true, force: true });
@@ -101,6 +119,7 @@ export async function runLocalPipeline(
 async function readPdf(path: string): Promise<Buffer | null> {
   try {
     return await readFile(path);
+    /* v8 ignore next 3 -- defensive: engine reports success but PDF missing; would require a custom fake engine that exits 0 without writing main.pdf */
   } catch {
     return null;
   }

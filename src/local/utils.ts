@@ -1,15 +1,25 @@
 import { access, constants } from 'node:fs/promises';
 
-const SAFE_FILENAME = /^[a-zA-Z0-9._-][a-zA-Z0-9._/-]*$/;
+const SAFE_FILENAME = /^[a-zA-Z0-9._-][a-zA-Z0-9._/ -]*$/;
+
+// Names the pipeline itself produces/consumes in the working directory.
+// `main.tex` as an attachment would race the source write; `main.pdf` would be
+// returned as the "compiled" output whenever the engine fails to produce one.
+const RESERVED_FILENAMES = new Set(['main.tex', 'main.pdf']);
 
 export function validateFilename(filename: string): void {
-  if (!SAFE_FILENAME.test(filename) || filename.includes('..') || filename.startsWith('/')) {
+  if (!isFilenameValid(filename)) {
     throw new TypeError(`platex: invalid filename "${filename}"`);
   }
 }
 
 export function isFilenameValid(filename: string): boolean {
-  return SAFE_FILENAME.test(filename) && !filename.includes('..') && !filename.startsWith('/');
+  return (
+    SAFE_FILENAME.test(filename) &&
+    !filename.includes('..') &&
+    !filename.startsWith('/') &&
+    !RESERVED_FILENAMES.has(filename)
+  );
 }
 
 // Positive probe results are cached (as the in-flight promise, which also

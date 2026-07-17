@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { access, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { BibEngine, RawPassLog } from '../types.js';
 import { spawnProcess } from './compiler.js';
@@ -42,8 +42,22 @@ export async function runBibliography(opts: {
   return { passNumber, engine, stdout, stderr, log: logContent, exitCode, timedOut };
 }
 
-/** Returns true if main.aux signals that bibliography compilation is needed */
-export async function detectBibliography(tmpDir: string): Promise<boolean> {
+/**
+ * Returns true if the first LaTeX pass signals that bibliography compilation
+ * is needed. The signal differs by engine: the bibtex workflow writes
+ * `\citation{}`/`\bibdata{}` into main.aux, while biblatex+biber requests a
+ * biber run by writing a control file (main.bcf) instead — it never emits
+ * `\bibdata`, so the aux check alone would silently skip biber.
+ */
+export async function detectBibliography(tmpDir: string, bibEngine: BibEngine): Promise<boolean> {
+  if (bibEngine === 'biber') {
+    try {
+      await access(join(tmpDir, 'main.bcf'));
+      return true;
+    } catch {
+      return false;
+    }
+  }
   try {
     const aux = await readFile(join(tmpDir, 'main.aux'), 'utf-8');
     return /\\citation\{/.test(aux) && /\\bibdata\{/.test(aux);

@@ -72,7 +72,7 @@ export async function runPasses(
   }
 
   // ── Bibliography pass ────────────────────────────────────────────────────────
-  const bibNeeded = bibliography !== 'none' && (await detectBibliography(tmpDir));
+  const bibNeeded = bibliography !== 'none' && (await detectBibliography(tmpDir, bibliography));
   if (bibNeeded) {
     passNumber++;
     const bibLog = await runBibliography({
@@ -92,9 +92,11 @@ export async function runPasses(
   }
 
   // ── Pass 2 ──────────────────────────────────────────────────────────────────
+  // An explicit numeric `passes` is a hard cap: `passes: 1` means exactly one
+  // LaTeX pass even when a bibliography ran (its .bbl just won't be inlined
+  // until the caller compiles again) — only 'auto' lets bibNeeded force reruns.
   const needsPass2 =
-    bibNeeded ||
-    (passes === 'auto' && needsRerun(log1.log)) ||
+    (passes === 'auto' && (bibNeeded || needsRerun(log1.log))) ||
     (typeof passes === 'number' && passes >= 2);
   if (!needsPass2 || remainingTime() <= 0) {
     return { errors: allErrors, warnings: allWarnings, logs: allLogs };

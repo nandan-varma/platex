@@ -2,7 +2,8 @@ import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { parseArgs } from 'node:util';
 import { compile } from './compile-core.js';
-import type { BibEngine, CompileOptions, CompileResult, Engine, PassCount } from './types.js';
+import { BIB_ENGINES, ENGINES } from './defaults.js';
+import type { CompileOptions, CompileResult, PassCount } from './types.js';
 
 /**
  * Injectable I/O so the CLI is unit-testable without spawning a process.
@@ -22,9 +23,6 @@ export interface CliIO {
   /** Source text to use when the input path is `-` (defaults to reading stdin). */
   stdin?: () => Promise<string>;
 }
-
-const ENGINES: readonly Engine[] = ['pdflatex', 'xelatex', 'lualatex', 'tectonic'];
-const BIB_ENGINES: readonly BibEngine[] = ['bibtex', 'biber', 'none'];
 
 const USAGE = `Usage: platex <input.tex> [options]
 

@@ -29,16 +29,25 @@ describe('detectBibliography', () => {
 
   it('returns true when main.aux has both \\citation and \\bibdata', async () => {
     await writeFile(join(tmpDir, 'main.aux'), '\\citation{smith2023}\n\\bibdata{refs}\n', 'utf-8');
-    expect(await detectBibliography(tmpDir)).toBe(true);
+    expect(await detectBibliography(tmpDir, 'bibtex')).toBe(true);
   });
 
   it('returns false when main.aux has only \\citation', async () => {
     await writeFile(join(tmpDir, 'main.aux'), '\\citation{smith2023}\n', 'utf-8');
-    expect(await detectBibliography(tmpDir)).toBe(false);
+    expect(await detectBibliography(tmpDir, 'bibtex')).toBe(false);
   });
 
   it('returns false when main.aux does not exist', async () => {
-    expect(await detectBibliography(tmpDir)).toBe(false);
+    expect(await detectBibliography(tmpDir, 'bibtex')).toBe(false);
+  });
+
+  it('returns true when main.bcf exists (biber)', async () => {
+    await writeFile(join(tmpDir, 'main.bcf'), '', 'utf-8');
+    expect(await detectBibliography(tmpDir, 'biber')).toBe(true);
+  });
+
+  it('returns false when main.bcf does not exist (biber)', async () => {
+    expect(await detectBibliography(tmpDir, 'biber')).toBe(false);
   });
 });
 

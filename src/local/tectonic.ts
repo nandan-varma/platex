@@ -6,8 +6,14 @@ import type { RawPassLog } from '../types.js';
 import { spawnProcess } from './compiler.js';
 import { isCommandAvailable } from './utils.js';
 
-/** Where the Tectonic binary lives at runtime in a Vercel/Lambda function. */
-const TMP_BINARY = '/tmp/platex-tectonic';
+// Suffix shared paths in the world-writable /tmp with the uid so that on a
+// multi-user machine another user can't pre-create the path and have their
+// binary executed (or their cache read) by us.
+/* v8 ignore next -- getuid is absent only on Windows; CI runs POSIX */
+const UID_SUFFIX = typeof process.getuid === 'function' ? String(process.getuid()) : 'win';
+
+/** Where the Tectonic binary lives at runtime in a Vercel/Lambda function. Exported for tests. */
+export const TMP_BINARY = `/tmp/platex-tectonic-${UID_SUFFIX}`;
 
 /**
  * Path candidates to the bundled binary, relative to this file's location.
@@ -89,7 +95,7 @@ export async function runTectonic(opts: {
     timeout,
     {
       // Direct Tectonic's package cache to /tmp (only writable dir on Vercel/Lambda)
-      XDG_CACHE_HOME: '/tmp/.tectonic-cache',
+      XDG_CACHE_HOME: `/tmp/.tectonic-cache-${UID_SUFFIX}`,
     },
     signal,
   );

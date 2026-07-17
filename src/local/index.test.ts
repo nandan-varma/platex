@@ -126,6 +126,20 @@ describe('runLocalPipeline (real Tectonic compilation)', () => {
     expect(result.errors).toHaveLength(0);
   });
 
+  it('returns null PDF and errors when a system engine reports a fatal failure', async () => {
+    const result = await runLocalPipeline('FATAL_ERROR', { engine: FAKE_LATEX as never });
+
+    expect(result.pdf).toBeNull();
+    expect(result.errors.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('short-circuits the engine probe when engine is explicitly "tectonic"', async () => {
+    const source = await readFixture('minimal.tex');
+    const result = await runLocalPipeline(source, { engine: 'tectonic' });
+    expect(result.pdf).not.toBeNull();
+    expect(result.errors).toHaveLength(0);
+  });
+
   it(
     'throws a TypeError for path-traversal filenames',
     async () => {
@@ -172,6 +186,13 @@ describe('runLocalPipeline (real Tectonic compilation)', () => {
       files[`f${i}.txt`] = Buffer.from('x');
     }
     await expect(runLocalPipeline('clean document', { files })).rejects.toThrow(TypeError);
+  });
+
+  it('rejects source that exceeds the byte limit', async () => {
+    const limits = { maxSourceBytes: 10 };
+    await expect(runLocalPipeline('a'.repeat(11), { limits })).rejects.toThrow(
+      /exceeds 10 byte limit/,
+    );
   });
 
   it('rejects files whose combined size exceeds MAX_TOTAL_FILES_BYTES before touching disk', async () => {

@@ -262,6 +262,15 @@ describe('createApp(config) — programmatic configuration (no env vars)', () =>
     expect(res.status).toBe(400);
   });
 
+  it('rejects multibyte sources that exceed the byte limit but not the character limit', async () => {
+    // '日本語' is 3 UTF-16 code units but 9 UTF-8 bytes — with a 5-byte limit
+    // the old z.string().max() would have accepted it; the byte-accurate
+    // .refine() should reject it with 400 (not 500 from runLocalPipeline).
+    const app = createApp({ limits: { maxSourceBytes: 5 } });
+    const res = await postCompile(app, { source: '日本語' });
+    expect(res.status).toBe(400);
+  });
+
   it('accepts a smaller maxFilesCount via limits', async () => {
     const app = createApp({ limits: { maxFilesCount: 1 } });
     const res = await postCompile(app, {
