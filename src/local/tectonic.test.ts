@@ -53,4 +53,21 @@ describe('resolveTectonicBinary', () => {
     expect(first).toBe(TMP_BINARY);
     expect(second).toBe(TMP_BINARY);
   });
+
+  it('never leaves a partially-written binary behind when concurrent cold calls race', async () => {
+    // Simulates Fluid Compute reusing a warm instance across concurrent
+    // requests: several callers can all observe "no TMP_BINARY yet" and race
+    // to stage it. The atomic rename in resolveTectonicBinary should mean
+    // every caller ends up with a fully-formed, executable binary — never a
+    // half-written one from an interleaved copy.
+    process.env.PATH = '/usr/bin:/bin';
+    await rm(TMP_BINARY, { force: true });
+
+    const results = await Promise.all(Array.from({ length: 8 }, () => resolveTectonicBinary()));
+
+    expect(results.every((r) => r === TMP_BINARY)).toBe(true);
+    const stats = await stat(TMP_BINARY);
+    expect(stats.mode & 0o111).not.toBe(0);
+    expect(stats.size).toBeGreaterThan(0);
+  });
 });

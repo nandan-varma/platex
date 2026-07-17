@@ -50,6 +50,50 @@ describe('spawnProcess', () => {
     const elapsed = Date.now() - started;
     expect(elapsed).toBeLessThan(5_000);
     expect(result.exitCode).not.toBe(0);
+    expect(result.timedOut).toBe(true);
+  });
+
+  it('reports timedOut: false for a process that exits on its own before the timeout', async () => {
+    const result = await spawnProcess(
+      process.execPath,
+      ['-e', 'process.exit(1)'],
+      process.cwd(),
+      5_000,
+    );
+    expect(result.timedOut).toBe(false);
+  });
+
+  it('kills the process immediately when the passed AbortSignal fires', async () => {
+    const controller = new AbortController();
+    const started = Date.now();
+    const promise = spawnProcess(
+      process.execPath,
+      ['-e', 'setTimeout(() => {}, 10_000)'],
+      process.cwd(),
+      10_000,
+      undefined,
+      controller.signal,
+    );
+    setTimeout(() => controller.abort(), 100);
+    const result = await promise;
+    const elapsed = Date.now() - started;
+    expect(elapsed).toBeLessThan(5_000);
+    expect(result.exitCode).not.toBe(0);
+    expect(result.timedOut).toBe(false);
+  });
+
+  it('resolves without spawning when the AbortSignal is already aborted', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const result = await spawnProcess(
+      process.execPath,
+      ['-e', 'process.exit(0)'],
+      process.cwd(),
+      5_000,
+      undefined,
+      controller.signal,
+    );
+    expect(result.exitCode).not.toBe(0);
   });
 
   it('resolves with exit code 127 when the binary does not exist', async () => {

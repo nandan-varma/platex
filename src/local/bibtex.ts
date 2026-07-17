@@ -8,8 +8,9 @@ export async function runBibliography(opts: {
   tmpDir: string;
   passNumber: number;
   timeout: number;
+  signal?: AbortSignal | undefined;
 }): Promise<RawPassLog | null> {
-  const { bibEngine, tmpDir, passNumber, timeout } = opts;
+  const { bibEngine, tmpDir, passNumber, timeout, signal } = opts;
 
   if (bibEngine === 'none') return null;
 
@@ -21,7 +22,14 @@ export async function runBibliography(opts: {
       ? ['main']
       : ['--input-directory', tmpDir, '--output-directory', tmpDir, 'main'];
 
-  const { stdout, stderr, exitCode } = await spawnProcess(engine, args, tmpDir, timeout);
+  const { stdout, stderr, exitCode, timedOut } = await spawnProcess(
+    engine,
+    args,
+    tmpDir,
+    timeout,
+    undefined,
+    signal,
+  );
 
   // Read the .blg log file
   let logContent = '';
@@ -31,7 +39,7 @@ export async function runBibliography(opts: {
     logContent = stdout;
   }
 
-  return { passNumber, engine, stdout, stderr, log: logContent, exitCode };
+  return { passNumber, engine, stdout, stderr, log: logContent, exitCode, timedOut };
 }
 
 /** Returns true if main.aux signals that bibliography compilation is needed */

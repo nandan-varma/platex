@@ -151,6 +151,38 @@ describe('runPasses', () => {
     expect(result.logs).toHaveLength(3);
   });
 
+  it('stops immediately on a pass that crashes without a parsed "!" error, even with passes forced', async () => {
+    tmpDir = await setup('CRASH document');
+
+    const result = await runPasses(tmpDir, {
+      engine: FAKE_LATEX,
+      passes: 3,
+      bibliography: 'bibtex',
+      timeout: 5_000,
+    });
+
+    // Previously: a crash with no parsed error didn't satisfy the old
+    // "errors.length > 0 && exitCode !== 0" guard, so passes 2 and 3 would
+    // still run pointlessly. Now any non-zero exit stops the pipeline.
+    expect(result.logs).toHaveLength(1);
+    expect(result.logs[0]?.exitCode).toBe(2);
+  });
+
+  it('treats `timeout` as an overall pipeline budget, skipping later passes once it is exhausted', async () => {
+    tmpDir = await setup('clean document SLEEP_300');
+
+    const result = await runPasses(tmpDir, {
+      engine: FAKE_LATEX,
+      passes: 3, // force pass 2 and 3 regardless of rerun signals
+      bibliography: 'bibtex',
+      timeout: 300,
+    });
+
+    // Pass 1 alone consumes (at least) the whole budget, so passes 2 and 3
+    // must be skipped even though `passes: 3` explicitly asked for them.
+    expect(result.logs).toHaveLength(1);
+  }, 10_000);
+
   it('deduplicates an identical non-fatal error reported across multiple passes', async () => {
     tmpDir = await setup('SOFT_ERROR_TWICE RERUN_ONCE document');
 

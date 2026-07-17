@@ -8,6 +8,8 @@
 //   RERUN_ONCE       -> first invocation signals "rerun needed"; subsequent ones don't
 //   HAS_CITATION     -> writes an aux file with \citation{}/\bibdata{} so bibtex triggers
 //   NO_LOG_FILE      -> never writes main.log (forces stdout fallback)
+//   CRASH            -> exits 2 with no "!"-formatted error (simulates a hard crash)
+//   SLEEP_<ms>       -> blocks synchronously for <ms> before doing anything else
 //
 // Tracks invocation count per tmpDir via a counter file, so multi-pass
 // behavior (needsRerun) can be exercised for real.
@@ -17,6 +19,16 @@ import { join } from 'node:path';
 const cwd = process.cwd();
 const mainTexPath = join(cwd, 'main.tex');
 const source = existsSync(mainTexPath) ? readFileSync(mainTexPath, 'utf-8') : '';
+
+const sleepMatch = source.match(/SLEEP_(\d+)/);
+if (sleepMatch) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, parseInt(sleepMatch[1], 10));
+}
+
+if (source.includes('CRASH')) {
+  process.stdout.write('fatal internal error, no clean log');
+  process.exit(2);
+}
 
 const counterPath = join(cwd, '.fakepass-count');
 const prevCount = existsSync(counterPath) ? parseInt(readFileSync(counterPath, 'utf-8'), 10) : 0;

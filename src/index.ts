@@ -1,8 +1,7 @@
+import { MAX_SOURCE_BYTES } from './defaults.js';
 import { runLocalPipeline } from './local/index.js';
 import { callRemote } from './remote/client.js';
 import type { CompileOptions, CompileResult } from './types.js';
-
-const MAX_SOURCE_BYTES = 5_000_000;
 
 export async function compile(
   source: string,

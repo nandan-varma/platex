@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { MAX_FILES_COUNT, MAX_TOTAL_FILES_BYTES } from '../defaults.js';
 import { runLocalPipeline } from './index.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -123,4 +124,19 @@ describe('runLocalPipeline (real Tectonic compilation)', () => {
     },
     TIMEOUT,
   );
+
+  it('rejects more than MAX_FILES_COUNT files before touching disk', async () => {
+    const files: Record<string, Buffer> = {};
+    for (let i = 0; i < MAX_FILES_COUNT + 1; i++) {
+      files[`f${i}.txt`] = Buffer.from('x');
+    }
+    await expect(runLocalPipeline('clean document', { files })).rejects.toThrow(TypeError);
+  });
+
+  it('rejects files whose combined size exceeds MAX_TOTAL_FILES_BYTES before touching disk', async () => {
+    const big = Buffer.alloc(Math.ceil(MAX_TOTAL_FILES_BYTES / 2) + 1);
+    await expect(
+      runLocalPipeline('clean document', { files: { 'a.bin': big, 'b.bin': big } }),
+    ).rejects.toThrow(TypeError);
+  });
 });

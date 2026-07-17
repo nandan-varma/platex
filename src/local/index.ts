@@ -1,7 +1,14 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { DEFAULT_BIB, DEFAULT_ENGINE, DEFAULT_PASSES, DEFAULT_TIMEOUT } from '../defaults.js';
+import {
+  DEFAULT_BIB,
+  DEFAULT_ENGINE,
+  DEFAULT_PASSES,
+  DEFAULT_TIMEOUT,
+  MAX_FILES_COUNT,
+  MAX_TOTAL_FILES_BYTES,
+} from '../defaults.js';
 import type { CompileOptions, CompileResult } from '../types.js';
 import { parseLog } from './log-parser.js';
 import { runPasses } from './passes.js';
@@ -16,7 +23,17 @@ export async function runLocalPipeline(
   const passes = options.passes ?? DEFAULT_PASSES;
   const bibliography = options.bibliography ?? DEFAULT_BIB;
   const timeout = options.timeout ?? DEFAULT_TIMEOUT;
+  const signal = options.signal;
   const files = options.files ?? {};
+
+  const fileEntries = Object.entries(files);
+  if (fileEntries.length > MAX_FILES_COUNT) {
+    throw new TypeError(`platex: too many files (max ${MAX_FILES_COUNT})`);
+  }
+  const totalFilesBytes = fileEntries.reduce((sum, [, buf]) => sum + buf.length, 0);
+  if (totalFilesBytes > MAX_TOTAL_FILES_BYTES) {
+    throw new TypeError(`platex: total files size exceeds ${MAX_TOTAL_FILES_BYTES} bytes`);
+  }
 
   const tmpDir = await mkdtemp(join(tmpdir(), 'platex-'));
 
@@ -25,7 +42,7 @@ export async function runLocalPipeline(
     await writeFile(join(tmpDir, 'main.tex'), source, 'utf-8');
 
     // Write additional files, creating subdirectories as needed
-    for (const [filename, content] of Object.entries(files)) {
+    for (const [filename, content] of fileEntries) {
       validateFilename(filename);
       const dest = join(tmpDir, filename);
       const dir = dirname(dest);
@@ -45,6 +62,7 @@ export async function runLocalPipeline(
         passes,
         bibliography,
         timeout,
+        signal,
       });
 
       const pdf = await readPdf(join(tmpDir, 'main.pdf'));
@@ -60,7 +78,7 @@ export async function runLocalPipeline(
       );
     }
 
-    const rawLog = await runTectonic({ binary: tectonicBinary, tmpDir, timeout });
+    const rawLog = await runTectonic({ binary: tectonicBinary, tmpDir, timeout, signal });
     const { errors, warnings } = parseLog(rawLog.log, 'latex');
     const pdf = await readPdf(join(tmpDir, 'main.pdf'));
     return { pdf, errors, warnings, logs: [rawLog] };

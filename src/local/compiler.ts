@@ -10,14 +10,22 @@ export interface RunEngineOptions {
   tmpDir: string;
   passNumber: number;
   timeout: number;
+  signal?: AbortSignal | undefined;
 }
 
 export async function runEngine(opts: RunEngineOptions): Promise<RawPassLog> {
-  const { engine, tmpDir, passNumber, timeout } = opts;
+  const { engine, tmpDir, passNumber, timeout, signal } = opts;
 
   const args = [...LATEX_FLAGS, `-output-directory=${tmpDir}`, 'main.tex'];
 
-  const { stdout, stderr, exitCode } = await spawnProcess(engine, args, tmpDir, timeout);
+  const { stdout, stderr, exitCode, timedOut } = await spawnProcess(
+    engine,
+    args,
+    tmpDir,
+    timeout,
+    undefined,
+    signal,
+  );
 
   // .log file is more complete than stdout for multi-file projects
   let logContent = '';
@@ -27,13 +35,15 @@ export async function runEngine(opts: RunEngineOptions): Promise<RawPassLog> {
     logContent = stdout;
   }
 
-  return { passNumber, engine, stdout, stderr, log: logContent, exitCode };
+  return { passNumber, engine, stdout, stderr, log: logContent, exitCode, timedOut };
 }
 
 export interface SpawnResult {
   stdout: string;
   stderr: string;
   exitCode: number;
+  /** True if the process was killed because it exceeded `timeout`. */
+  timedOut: boolean;
 }
 
 export function spawnProcess(
@@ -42,10 +52,17 @@ export function spawnProcess(
   cwd: string,
   timeout: number,
   env?: NodeJS.ProcessEnv,
+  signal?: AbortSignal,
 ): Promise<SpawnResult> {
   return new Promise((resolve) => {
+    if (signal?.aborted) {
+      resolve({ stdout: '', stderr: 'aborted', exitCode: 1, timedOut: false });
+      return;
+    }
+
     const stdoutChunks: Buffer[] = [];
     const stderrChunks: Buffer[] = [];
+    let timedOut = false;
 
     const child = spawn(command, args, {
       cwd,
@@ -62,27 +79,40 @@ export function spawnProcess(
     });
 
     const killTimer = setTimeout(() => {
+      timedOut = true;
       child.kill('SIGKILL');
     }, timeout);
+
+    const onAbort = () => {
+      child.kill('SIGKILL');
+    };
+    signal?.addEventListener('abort', onAbort);
+
+    const cleanup = () => {
+      clearTimeout(killTimer);
+      signal?.removeEventListener('abort', onAbort);
+    };
 
     child.stdout?.on('data', (chunk: Buffer) => stdoutChunks.push(chunk));
     child.stderr?.on('data', (chunk: Buffer) => stderrChunks.push(chunk));
 
     child.on('close', (code) => {
-      clearTimeout(killTimer);
+      cleanup();
       resolve({
         stdout: Buffer.concat(stdoutChunks).toString('utf-8'),
         stderr: Buffer.concat(stderrChunks).toString('utf-8'),
         exitCode: code ?? 1,
+        timedOut,
       });
     });
 
     child.on('error', (err) => {
-      clearTimeout(killTimer);
+      cleanup();
       resolve({
         stdout: '',
         stderr: err.message,
         exitCode: 127,
+        timedOut: false,
       });
     });
   });
