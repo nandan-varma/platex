@@ -1,7 +1,7 @@
 {
   "name": "@nandan-varma/platex",
   "version": "0.0.5",
-  "description": "Compile LaTeX to PDF binary matching Overleaf output, with Next.js support",
+  "description": "Compile LaTeX to PDF binary with accurate output, with Next.js support",
   "license": "MIT",
   "author": "Nandan Varma",
   "homepage": "https://github.com/nandan-varma/platex#readme",
@@ -16,7 +16,6 @@
     "latex",
     "tex",
     "pdf",
-    "overleaf",
     "pdflatex",
     "tectonic",
     "nextjs",
@@ -73,6 +72,7 @@
   "devDependencies": {
     "@biomejs/biome": "^2.5.4",
     "@types/node": "^22.15.21",
+    "@vitest/coverage-v8": "^3.2.6",
     "tsup": "^8.5.0",
     "tsx": "^4.19.4",
     "typescript": "^5.8.3",
