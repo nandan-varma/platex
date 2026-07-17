@@ -1,0 +1,101 @@
+---
+title: How it works
+description: Deployment modes, the three entry points, what Tectonic is, and how output accuracy is achieved.
+---
+
+import { Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
+
+platex is one small client library plus one optional compilation service. This
+page explains the moving parts so you can pick the right setup.
+
+## The two-part architecture
+
+```
+┌─────────────────────────────────┐   HTTP POST /compile   ┌──────────────────────────────────┐
+│  Your app (any framework,       │ ─────────────────────▶ │  platex service (Vercel/Fly/     │
+│  Node.js or edge)               │                        │  Railway/Render/self-hosted)     │
+│                                 │                        │                                  │
+│  createPlatexClient(...)        │ ◀───────────────────── │  Tectonic TeX engine (bundled    │
+│  await platex.compile(source)   │      PDF binary        │  ~13MB, downloads packages       │
+│                                 │                        │  on first use)                   │
+└─────────────────────────────────┘                        └──────────────────────────────────┘
+```
+
+Your app calls `compile()`. Depending on configuration, that either sends the
+source to the remote service over HTTP or compiles it locally on the same
+machine. Either way you get back a `CompileResult` with the PDF and structured
+diagnostics.
+
+## Two deployment targets, same library
+
+The library **auto-selects** the engine based on whether a `serviceUrl`
+resolves — you don't choose the engine directly.
+
+| Mode | When | Engine | Use case |
+|---|---|---|---|
+| **Remote** (recommended for Vercel/edge) | `serviceUrl` resolved | Tectonic (on the service) | Production, or any edge runtime |
+| **Local** | No `serviceUrl`, system TeX found | pdflatex / xelatex / lualatex | Self-hosted or dev with TeX Live |
+| **Local fallback** | No `serviceUrl`, no system TeX | Bundled Tectonic binary | Dev / CLI without TeX Live installed |
+
+`serviceUrl` resolves from the explicit `CompileOptions.serviceUrl`, falling
+back to the `PLATEX_SERVICE_URL` environment variable.
+
+<Aside type="tip">
+  Remote mode keeps CPU-intensive TeX off your app server and works from edge
+  runtimes. Local mode is great for scripts, CLI use, and self-hosted servers
+  that already have TeX. You can mix them: dev locally, deploy remote.
+</Aside>
+
+## The three entry points
+
+Each import targets a different runtime. They share the same option and result
+types, so switching is mostly a matter of the import specifier.
+
+| Import from | Runtime | What it's for |
+|---|---|---|
+| `@nandan-varma/platex` | Node.js | `compile`, `createPlatexClient`, `handleCompileRequest`, `createRequestHandler` — full library, local-compile fallback included |
+| `@nandan-varma/platex/client` | Anything with `fetch` — Vercel/Next.js Edge, Cloudflare Workers, Bun, Deno, browsers | Same client/handler API, **remote-only** |
+| `@nandan-varma/platex/server` | Node.js | `createApp`, `createCompileRoute` — embed the compile HTTP API into your own server instead of running the standalone service |
+
+`@nandan-varma/platex/client` never imports `node:child_process` / `node:fs` /
+`node:os`, so it's safe to bundle for edge deployments. If you call `.compile()`
+without a `serviceUrl` (and none in `PLATEX_SERVICE_URL`), it throws
+immediately with a clear message instead of trying — and failing — to spawn a
+local TeX process that can't exist on that runtime.
+
+<LinkCard title="Edge & serverless" href="/frameworks/edge/" description="Using the remote-only client on the Edge Runtime and Workers." />
+
+## What Tectonic is
+
+[Tectonic](https://tectonic-typesetting.github.io) is a self-contained TeX
+engine (~13 MB binary) based on XeTeX. Unlike a full pdflatex install, it:
+
+- **Bundles everything it needs** — no separate TeX Live installation required.
+- **Auto-downloads missing LaTeX packages** from its CDN on first use.
+- **Handles multi-pass compilation and bibliography internally** — no manual bibtex runs.
+- **Caches packages in `/tmp`** on Vercel, making warm-container reuse fast.
+
+When system TeX Live is available (self-hosted Docker), the library uses
+pdflatex / xelatex / lualatex directly with full multi-pass control.
+
+## How output accuracy works
+
+When running with **system TeX Live** (Docker / self-hosted):
+
+- Same engine flags: `-interaction=nonstopmode -halt-on-error -file-line-error`
+- Same multi-pass logic: detects `\citation{}` in `.aux` → runs bibtex → re-runs LaTeX
+- Same rerun patterns: *Rerun to get cross-references right*, *Label(s) may have changed*, hyperref outlines, natbib, longtable
+- Same Docker base image: `texlive/texlive:latest` (the official TeX Users Group full TeX Live image)
+
+When running on **Vercel with Tectonic**, output is XeTeX-based — nearly
+identical for most documents, with minor differences possible in documents that
+rely on pdflatex-specific font metrics.
+
+## Where to next
+
+<CardGrid>
+  <LinkCard title="Compiling LaTeX" href="/guides/compiling/" description="The compile() API and the reusable client." />
+  <LinkCard title="Deploy the service" href="/deployment/service/" description="Stand up the remote service on Vercel or elsewhere." />
+  <LinkCard title="Self-hosting with Docker" href="/deployment/docker/" description="Full TeX Live for maximum accuracy." />
+  <LinkCard title="API reference" href="/api-reference/" description="Every type, option, and default." />
+</CardGrid>

@@ -1,0 +1,122 @@
+---
+title: Installation
+description: >-
+  Install the client library, deploy the compilation service, and point one at
+  the other — or skip the service entirely and compile locally.
+---
+
+import { Steps, Aside, LinkCard } from '@astrojs/starlight/components';
+
+platex is a two-part system: a **compilation service** that does the actual
+LaTeX → PDF work, and a thin **client library** your app calls. You can also
+skip the service and compile locally (system TeX Live or the bundled Tectonic
+binary) — handy for scripts, CLI use, and development.
+
+## Install the library
+
+```bash
+npm install @nandan-varma/platex
+```
+
+The package exposes three entry points — pick the one that matches your runtime:
+
+| Import from | Runtime | What it's for |
+|---|---|---|
+| `@nandan-varma/platex` | Node.js | `compile`, `createPlatexClient`, `handleCompileRequest` — full library, local-compile fallback included |
+| `@nandan-varma/platex/client` | Anything with `fetch` (edge, Workers, Bun, Deno, browsers) | Same client/handler API, remote-only |
+| `@nandan-varma/platex/server` | Node.js | `createApp`, `createCompileRoute` — embed the HTTP API into your own server |
+
+See [How it works](/guides/how-it-works/) for when to use each.
+
+## Set up the service
+
+<Steps>
+
+1. **Deploy the platex service.** It does the actual compilation and runs
+   anywhere Node.js runs — Vercel, Fly.io, Railway, Render, or your own Docker
+   host. On Vercel it bundles the [Tectonic](https://tectonic-typesetting.github.io)
+   engine into the serverless function.
+
+   ```bash
+   git clone https://github.com/nandan-varma/platex
+   cd platex
+   npx vercel deploy
+   ```
+
+   Your service is now live at something like `https://platex-xxx.vercel.app`.
+   See [Deploy the service](/deployment/service/) for the full walkthrough, and
+   [Self-hosting with Docker](/deployment/docker/) for full TeX Live.
+
+2. **Point the client at the service.** Set `PLATEX_SERVICE_URL` in your app's
+   environment (the Vercel dashboard, or `.env.local` for local dev):
+
+   ```bash title=".env.local"
+   PLATEX_SERVICE_URL=https://your-platex-service.vercel.app
+   # PLATEX_API_KEY=...   # only if you enabled auth on the service
+   ```
+
+   Both `createPlatexClient()` and the plain `compile()` / `handleCompileRequest`
+   read these automatically — you never thread `process.env` through your own
+   code.
+
+3. **Compile.** That's the whole setup.
+
+   ```typescript
+   import { compile } from '@nandan-varma/platex';
+
+   const result = await compile(source); // uses PLATEX_SERVICE_URL
+   ```
+
+</Steps>
+
+## Which engine runs?
+
+The library **auto-selects** the engine — you don't configure this directly. It
+resolves `serviceUrl` from the explicit option, falling back to
+`PLATEX_SERVICE_URL`.
+
+| Mode | When | Engine | Use case |
+| --- | --- | --- | --- |
+| **Remote** | `serviceUrl` resolves | Tectonic (on the service) | Production on Vercel / any edge runtime |
+| **Local** | No `serviceUrl`, system TeX found | pdflatex / xelatex / lualatex | Self-hosted or dev with TeX Live |
+| **Local fallback** | No `serviceUrl`, no system TeX | Bundled Tectonic binary | Dev / CLI without TeX Live installed |
+
+<Aside type="note">
+  The edge-only entry point (`@nandan-varma/platex/client`) never compiles
+  locally. If no `serviceUrl` resolves it throws a clear error instead of trying
+  to spawn a TeX process that can't exist on that runtime.
+</Aside>
+
+## Develop without any TeX installed
+
+Skip the service entirely and let the library use the bundled Tectonic binary
+directly — this is exactly what powers the CLI's zero-install experience:
+
+```bash
+node scripts/download-tectonic.mjs
+```
+
+The script downloads Tectonic for your platform (macOS or Linux) and verifies it
+against a pinned SHA256 before extracting. After that, any `compile()` call with
+no `serviceUrl` resolves the bundled binary automatically.
+
+```typescript
+// No serviceUrl → uses the local tectonic binary
+const result = await compile(source);
+```
+
+## Try the CLI
+
+No project wiring required — the package ships a `platex` binary that runs the
+same pipeline:
+
+```bash
+npx @nandan-varma/platex main.tex     # → main.pdf, no TeX installation required
+```
+
+<LinkCard title="CLI & watch mode" href="/guides/cli/" description="Watch mode, extra files, remote compilation, stdin, and JSON output." />
+
+## Next steps
+
+<LinkCard title="Quick start" href="/quick-start/" description="From install to your first PDF, end to end." />
+<LinkCard title="How it works" href="/guides/how-it-works/" description="Deployment modes, entry points, and what Tectonic is." />

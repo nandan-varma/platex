@@ -1,0 +1,110 @@
+---
+title: Framework recipes
+description: The exact handleCompileRequest snippet for Astro, SvelteKit, Remix, TanStack Start, Bun, Deno, Hono, and Cloudflare Workers.
+sidebar:
+  label: Framework recipes
+---
+
+import { Tabs, TabItem, Aside, LinkCard } from '@astrojs/starlight/components';
+
+`handleCompileRequest` takes a standard [Fetch API](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API)
+`Request` and returns a `Response` — the same function works in every framework
+below without modification. Use `@nandan-varma/platex` for Node.js routes (with
+local-compile fallback) or `@nandan-varma/platex/client` for edge routes
+(remote-only).
+
+<Aside type="tip">
+  Next.js has dedicated pages per rendering pattern — see
+  [Server Components](/rendering/ssr/), [Client Components](/rendering/csr/),
+  [Server Actions](/rendering/server-actions/), and
+  [Route Handlers](/rendering/route-handlers/).
+</Aside>
+
+## The recipes
+
+<Tabs>
+  <TabItem label="Next.js">
+
+```typescript title="app/api/compile/route.ts"
+import { handleCompileRequest } from '@nandan-varma/platex';
+
+export const runtime = 'nodejs';
+export const POST = handleCompileRequest;
+```
+
+  </TabItem>
+  <TabItem label="TanStack Start">
+
+```typescript title="app/routes/api/compile.ts"
+import { createServerFileRoute } from '@tanstack/react-start/server';
+import { handleCompileRequest } from '@nandan-varma/platex';
+
+export const Route = createServerFileRoute('/api/compile').methods({
+  POST: ({ request }) => handleCompileRequest(request),
+});
+```
+
+  </TabItem>
+  <TabItem label="Astro">
+
+```typescript title="src/pages/api/compile.ts"
+import type { APIRoute } from 'astro';
+import { handleCompileRequest } from '@nandan-varma/platex';
+
+export const POST: APIRoute = ({ request }) => handleCompileRequest(request);
+```
+
+  </TabItem>
+  <TabItem label="SvelteKit">
+
+```typescript title="src/routes/api/compile/+server.ts"
+import { handleCompileRequest } from '@nandan-varma/platex';
+
+export const POST = ({ request }) => handleCompileRequest(request);
+```
+
+  </TabItem>
+  <TabItem label="Remix">
+
+```typescript title="app/routes/api.compile.ts"
+import { handleCompileRequest } from '@nandan-varma/platex';
+
+export async function action({ request }: { request: Request }) {
+  return handleCompileRequest(request);
+}
+```
+
+  </TabItem>
+  <TabItem label="Bun / Deno / Hono / Workers">
+
+Anything with a `Request` in, `Response` out handler:
+
+```typescript
+// use '@nandan-varma/platex/client' on the edge; 'platex' on Node/Bun/Deno for local fallback
+import { handleCompileRequest } from '@nandan-varma/platex/client';
+
+Bun.serve({ fetch: (req) => handleCompileRequest(req) });
+```
+
+  </TabItem>
+</Tabs>
+
+## Applying your client's defaults
+
+To apply a client's custom `timeout` / `apiKey` / `retry` without repeating them,
+bind the handler to a client once with `createRequestHandler`:
+
+```typescript
+import { createPlatexClient, createRequestHandler } from '@nandan-varma/platex';
+
+const platex = createPlatexClient({ timeout: 25_000, retry: 2 });
+export const POST = createRequestHandler(platex);
+```
+
+This works in every framework above — swap `export const POST = ...` for
+whatever that framework's route export looks like.
+
+## Where to next
+
+<LinkCard title="Edge & serverless" href="/frameworks/edge/" description="Using the remote-only client on the Edge Runtime, Workers, and more." />
+<LinkCard title="Request handlers" href="/guides/request-handlers/" description="Response codes, JSON mode, and request body shape." />

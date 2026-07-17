@@ -1,0 +1,122 @@
+---
+title: Cancellation, retries & timeouts
+description: Abort in-flight compiles with an AbortSignal, retry transient remote failures, and understand the wall-clock timeout budget.
+---
+
+import { Aside, LinkCard } from '@astrojs/starlight/components';
+
+Compiling is CPU-intensive and network-bound in remote mode, so platex gives you
+three controls for reliability: a hard **timeout** budget, transparent
+**retries** for transient failures, and **cancellation** via `AbortSignal`.
+
+## Timeouts
+
+`timeout` (default `30000` ms) is an **overall wall-clock budget for the entire
+compile pipeline** — not a per-process allowance.
+
+- **Local:** all LaTeX passes plus bibliography, combined, must finish within the budget. `src/local/passes.ts` tracks a deadline and gives each subprocess only the *remaining* time.
+- **Remote:** the whole HTTP round-trip must finish within the budget.
+
+```typescript
+const result = await compile(source, { timeout: 60_000 });
+```
+
+<Aside type="note">
+  The HTTP service caps `timeout` at **120 s** regardless of what a client
+  requests, so total server-side time per request is bounded. A client can ask
+  for less, never more. See [Server configuration](/deployment/server-config/).
+</Aside>
+
+If the budget is exceeded, the affected pass is killed and its `RawPassLog`
+entry has `timedOut: true`.
+
+## Retries
+
+`retry` (default `0`) sets the number of **extra attempts for the remote path**
+when a request fails for a *retryable* reason:
+
+- a network error,
+- platex's own timeout, or
+- a `5xx` response from the service.
+
+**Non-retryable** failures are never retried: any `4xx` (bad input, auth), or a
+caller-initiated `signal` abort. Local compiles ignore `retry` entirely.
+
+```typescript
+const platex = createPlatexClient({ retry: 2 }); // up to 3 attempts total
+```
+
+<Aside type="tip">
+  The retryability classification lives in `RemoteCompileError`. Because 4xx and
+  aborts are excluded, `retry` won't hammer the service on a genuinely bad
+  request or after you've cancelled.
+</Aside>
+
+## Cancellation
+
+Pass an `AbortSignal` to cancel an in-flight compile. It kills local
+subprocesses or aborts the remote HTTP request, depending on the mode.
+
+```typescript
+const controller = new AbortController();
+
+const promise = compile(source, { signal: controller.signal });
+
+// ...later, e.g. the user navigated away
+controller.abort();
+```
+
+An aborted compile rejects (it does not resolve to a `CompileResult`), so wrap
+it if you want to handle cancellation gracefully:
+
+```typescript
+try {
+  const result = await compile(source, { signal: controller.signal });
+} catch (err) {
+  if (controller.signal.aborted) {
+    // cancelled — nothing to clean up, no orphaned TeX processes
+  } else {
+    throw err;
+  }
+}
+```
+
+### Server-side wiring
+
+The standalone service and the request handlers wire the **incoming request's
+own abort signal** through to the compile, so a client that disconnects
+mid-request doesn't leave an orphaned TeX process running on the server. You get
+this automatically when you use `handleCompileRequest` / `createApp` — no extra
+code.
+
+<Aside type="note">
+  The CLI mirrors this: pressing <kbd>Ctrl-C</kbd> aborts the in-flight compile
+  cleanly, with no orphaned TeX processes. See [CLI & watch mode](/guides/cli/).
+</Aside>
+
+## Putting it together
+
+A resilient client-side setup for production:
+
+```typescript title="lib/platex.ts"
+import { createPlatexClient } from '@nandan-varma/platex';
+
+export const platex = createPlatexClient({
+  timeout: 25_000, // give up before the platform's own function limit
+  retry: 2,        // ride out transient network/5xx blips
+});
+```
+
+```typescript
+// per request, tie cancellation to the incoming request
+export async function POST(req: Request) {
+  const { source } = await req.json();
+  const result = await platex.compile(source, { signal: req.signal });
+  // ...
+}
+```
+
+## Where to next
+
+<LinkCard title="Compiling LaTeX" href="/guides/compiling/" description="Every option on compile() and the client." />
+<LinkCard title="Server configuration" href="/deployment/server-config/" description="Concurrency limits, the 120s cap, and body-size caps." />

@@ -1,0 +1,111 @@
+---
+title: Deploy the service
+description: Stand up the platex compilation service on Vercel or any Node.js host, then point your app at it.
+sidebar:
+  label: Deploy the service
+---
+
+import { Steps, Aside, LinkCard, Tabs, TabItem } from '@astrojs/starlight/components';
+
+The platex service does the actual LaTeX compilation. It's a standalone project
+that runs anywhere Node.js runs — Vercel, Fly.io, Railway, Render, or your own
+Docker host. Deploy it once, then point any number of apps at it via
+`PLATEX_SERVICE_URL`.
+
+## Deploy to Vercel
+
+<Steps>
+
+1. **Clone and deploy.**
+
+   ```bash
+   git clone https://github.com/nandan-varma/platex
+   cd platex
+   npx vercel deploy
+   ```
+
+2. **What the build does.** Vercel runs `npm run build:vercel`, which downloads
+   the Tectonic binary for Linux x86_64 (SHA256-pinned) and packs it into the
+   serverless function via `includeFiles: "bin/**"` in `vercel.json`. Your
+   service is now live at something like `https://platex-xxx.vercel.app`.
+
+3. **Point your app at it.** In your app's environment:
+
+   ```bash
+   PLATEX_SERVICE_URL=https://platex-xxx.vercel.app
+   ```
+
+</Steps>
+
+<Aside type="tip">
+  Tectonic caches downloaded LaTeX packages in `/tmp` on Vercel, so warm
+  containers reuse them and subsequent compiles are fast. The first compile after
+  a cold start pays a one-time package-download cost.
+</Aside>
+
+## Deploy elsewhere
+
+The service is a plain Node.js HTTP server, so it runs on any host. Two common
+shapes:
+
+<Tabs>
+  <TabItem label="Docker (full TeX Live)">
+
+For maximum accuracy, the Docker image uses full TeX Live instead of Tectonic:
+
+```bash
+npm run build:server
+docker build -f docker/Dockerfile -t platex .
+docker run -p 3001:3001 platex
+```
+
+See [Self-hosting with Docker](/deployment/docker/) for the full walkthrough.
+
+  </TabItem>
+  <TabItem label="Bundled server (Tectonic)">
+
+`npm run build:vercel` produces `dist/server.cjs` bundling the Tectonic binary.
+Run it directly on any Node host (Fly.io, Railway, Render):
+
+```bash
+npm run build:vercel
+node dist/server.cjs      # listens on PORT (default 3001)
+```
+
+  </TabItem>
+</Tabs>
+
+## Secure it before going public
+
+The service has **no auth by default**, and compiling is CPU-intensive. Before
+exposing it publicly, either restrict network access or enable bearer-token auth:
+
+```bash
+PLATEX_API_KEY=your-secret-key      # on the service
+```
+
+Then send the same key from your app:
+
+```bash
+PLATEX_API_KEY=your-secret-key      # on the client app
+```
+
+The client sends it as `Authorization: Bearer <key>` automatically. See
+[Server configuration](/deployment/server-config/) for auth, concurrency limits,
+and body-size caps.
+
+## Verify it's up
+
+```bash
+curl https://platex-xxx.vercel.app/health
+# → {"status":"ok"}
+```
+
+The `/health` endpoint never requires auth, so it's safe for uptime checks. From
+the client, `platex.health()` pings the same endpoint.
+
+## Where to next
+
+<LinkCard title="Server configuration" href="/deployment/server-config/" description="Auth, concurrency, limits, and body-size caps." />
+<LinkCard title="Self-hosting with Docker" href="/deployment/docker/" description="Full TeX Live for maximum accuracy." />
+<LinkCard title="HTTP API" href="/reference/http-api/" description="The endpoints and wire format the service speaks." />

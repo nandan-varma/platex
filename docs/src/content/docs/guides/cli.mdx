@@ -1,0 +1,162 @@
+---
+title: CLI & watch mode
+description: Drive the exact same compile pipeline from any shell or script — watch mode, extra files, remote compilation, stdin, and JSON output.
+---
+
+import { Tabs, TabItem, Aside, Steps, LinkCard, Badge } from '@astrojs/starlight/components';
+
+The package ships a `platex` binary that runs the **exact same pipeline** as the
+library — local system TeX Live → bundled Tectonic fallback → or a remote
+service. No project wiring, and no TeX installation required.
+
+```bash
+npx @nandan-varma/platex main.tex          # → main.pdf, right next to the input
+```
+
+If you've installed the package (globally or in a project), the bin is on your
+PATH as `platex`:
+
+```bash
+platex main.tex
+```
+
+## Common tasks
+
+<Tabs>
+  <TabItem label="Compile">
+
+```bash
+platex main.tex                      # → main.pdf
+platex main.tex -o out/paper.pdf     # custom output path (dirs are created)
+```
+
+  </TabItem>
+  <TabItem label="Watch">
+
+```bash
+platex main.tex -w                   # recompile on every save
+platex main.tex --watch -o out.pdf   # watch + custom output
+```
+
+  </TabItem>
+  <TabItem label="Attach files">
+
+```bash
+platex main.tex -f refs.bib -f figures/   # a file and a whole directory
+```
+
+  </TabItem>
+  <TabItem label="Remote">
+
+```bash
+platex main.tex -s https://platex.example.com
+platex main.tex --api-key "$PLATEX_API_KEY"
+```
+
+  </TabItem>
+  <TabItem label="stdin / JSON">
+
+```bash
+echo '\documentclass{article}\begin{document}Hi\end{document}' | platex -
+platex main.tex --json | jq '.errors'
+```
+
+  </TabItem>
+</Tabs>
+
+## Watch mode <Badge text="live rebuilds" variant="tip" />
+
+`-w` / `--watch` recompiles whenever the input **or any attached file** changes.
+platex watches every file it read for the last compile — the main `.tex`, every
+`-f` attachment, and every file inside an attached directory.
+
+```bash
+platex main.tex -w -f refs.bib -f figures/
+```
+
+<Steps>
+
+1. platex compiles once immediately and writes the PDF.
+2. It prints `— watching N file(s) for changes (Ctrl-C to stop)`.
+3. On any change, it recompiles and rewrites the output. The watched set is
+   re-synced after each build, so newly referenced files start being watched too.
+4. Press <kbd>Ctrl-C</kbd> to stop. The in-flight compile is aborted cleanly —
+   no orphaned TeX processes.
+
+</Steps>
+
+<Aside type="caution">
+  `--watch` cannot be combined with stdin input (`platex -`). There's no file to
+  watch, so platex exits with a usage error.
+</Aside>
+
+## Reading from stdin
+
+Pass `-` as the input to read LaTeX source from stdin. Combine with `-o` to name
+the output (otherwise `--json` output is your only result):
+
+```bash
+cat main.tex | platex - -o main.pdf
+platex - --json <<'EOF'
+\documentclass{article}
+\begin{document}Hello\end{document}
+EOF
+```
+
+## JSON output
+
+`--json` prints the full [`CompileResult`](/api-reference/#compileresult) as JSON
+on stdout, with the PDF base64-encoded in the `pdf` field. It writes the PDF
+**file** only if you also pass `-o`.
+
+```bash
+platex main.tex --json | jq -r '.pdf' | base64 -d > main.pdf   # extract the PDF
+platex main.tex --json | jq '.warnings'                         # inspect warnings
+platex main.tex --json -o main.pdf                              # JSON on stdout AND write the file
+```
+
+## All flags
+
+| Flag | Description |
+|---|---|
+| `-o, --output <path>` | Output PDF path (default: input path with `.pdf`) |
+| `-e, --engine <name>` | `pdflatex` \| `xelatex` \| `lualatex` \| `tectonic` |
+| `-p, --passes <n>` | `auto` \| `1` \| `2` \| `3` (default: `auto`) |
+| `-b, --bib <name>` | `bibtex` \| `biber` \| `none` (default: `bibtex`) |
+| `-f, --file <path>` | Attach an extra file or directory (repeatable). Files are keyed relative to the input's directory; directories are walked recursively and keyed relative to the directory itself |
+| `-t, --timeout <ms>` | Overall wall-clock budget for the whole pipeline |
+| `-s, --service-url <url>` | Compile remotely (default: `PLATEX_SERVICE_URL`) |
+| `--api-key <key>` | Bearer token for the service (default: `PLATEX_API_KEY`) |
+| `--retry <n>` | Extra attempts on retryable remote failures |
+| `-w, --watch` | Recompile whenever the input or attached files change |
+| `--json` | Print the full `CompileResult` as JSON on stdout (`pdf` base64-encoded); writes the PDF file only if `-o` is given |
+| `-q, --quiet` | Only print errors |
+| `-h, --help` | Show help |
+| `-V, --version` | Print the version |
+
+<Aside type="note">
+  CLI flags map 1:1 onto [`CompileOptions`](/guides/compiling/#the-options) —
+  `-f` builds `files`, `-s` sets `serviceUrl`, and so on. The engine list
+  includes `tectonic` explicitly, so you can force the bundled binary even when
+  system TeX is installed.
+</Aside>
+
+## Exit codes
+
+| Code | Meaning |
+|---|---|
+| `0` | Success |
+| `1` | Compile failed — errors are printed with `file:line` locations |
+| `2` | Usage or environment error (bad flags, missing input, `--watch` with stdin) |
+
+This makes platex easy to drop into CI or a `Makefile`:
+
+```bash
+platex paper.tex -q || exit 1
+```
+
+## Where to next
+
+<LinkCard title="Files & bibliography" href="/guides/files-and-bibliography/" description="How -f keys files into the sandbox." />
+<LinkCard title="CLI reference" href="/reference/cli/" description="The full flag reference in one table." />
+<LinkCard title="Compiling LaTeX" href="/guides/compiling/" description="The same options, from TypeScript." />

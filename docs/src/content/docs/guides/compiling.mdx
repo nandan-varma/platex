@@ -1,0 +1,163 @@
+---
+title: Compiling LaTeX
+description: The compile() function, the reusable createPlatexClient, and every option that shapes a compile.
+---
+
+import { Tabs, TabItem, Aside, LinkCard } from '@astrojs/starlight/components';
+
+Everything platex does flows through one function — `compile()`. The reusable
+client (`createPlatexClient`) and the HTTP handler
+(`handleCompileRequest`) are thin wrappers over it. This guide covers the call
+surface and the options that shape a compile.
+
+## `compile(source, options?)`
+
+```typescript
+import { compile } from '@nandan-varma/platex';
+
+const result = await compile(source, {
+  engine: 'pdflatex',
+  passes: 'auto',
+  serviceUrl: process.env.PLATEX_SERVICE_URL, // omit — read automatically
+});
+```
+
+`source` is your `main.tex` content as a string. The call returns a Promise
+resolving to a [`CompileResult`](#the-result). `options` is entirely optional —
+with `PLATEX_SERVICE_URL` set (or the bundled Tectonic present for local
+compiles), `await compile(source)` just works.
+
+## The reusable client
+
+Rather than passing the same options on every call, bake them into a client once
+and import it everywhere. This is the recommended pattern for apps.
+
+```typescript title="lib/platex.ts"
+import { createPlatexClient } from '@nandan-varma/platex';
+
+export const platex = createPlatexClient({
+  timeout: 25_000,
+  retry: 2,
+  // everything CompileOptions accepts except `files` and `signal`
+});
+```
+
+```typescript
+import { platex } from '@/lib/platex';
+
+const result = await platex.compile(source, {
+  // per-call options override the client's defaults
+  bibliography: 'biber',
+});
+```
+
+`createPlatexClient` returns plain functions — `const { compile } = platex`
+works, no `this` binding required. It also exposes a `health()` check:
+
+```typescript
+if (await platex.health()) {
+  // GET <serviceUrl>/health returned ok
+}
+// health() resolves true immediately when no serviceUrl is configured
+```
+
+## The options
+
+Every option is optional, has a documented default, and can be overridden per
+call, per client, or (for the server-enforced ones) per deployment.
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `engine` | `'pdflatex' \| 'xelatex' \| 'lualatex'` | `'pdflatex'` | TeX engine (used when system TeX is available; Tectonic is always XeTeX-based) |
+| `passes` | `'auto' \| 1 \| 2 \| 3` | `'auto'` | Compilation passes. `'auto'` reruns until output is stable |
+| `bibliography` | `'bibtex' \| 'biber' \| 'none'` | `'bibtex'` | Bibliography engine |
+| `files` | `Record<string, Buffer>` | `{}` | Additional files: `.bib`, images, included `.tex` files. See [Files & bibliography](/guides/files-and-bibliography/) |
+| `serviceUrl` | `string` | `PLATEX_SERVICE_URL` | URL of the platex service. If unset, compiles locally (Node entry only) |
+| `apiKey` | `string` | `PLATEX_API_KEY` | Sent as `Authorization: Bearer <apiKey>` to the service |
+| `headers` | `Record<string, string>` | `{}` | Extra headers merged into the remote request |
+| `timeout` | `number` | `30000` | Overall wall-clock budget (ms) for the *entire* pipeline — not per-process. See [timeouts](/guides/cancellation-and-retries/#timeouts) |
+| `limits` | `CompileLimits` | [see below](#input-size-limits) | Input-size ceilings for this call |
+| `retry` | `number` | `0` | Extra attempts on retryable *remote* failures. See [retries](/guides/cancellation-and-retries/#retries) |
+| `fetch` | `typeof fetch` | global `fetch` | Custom fetch implementation for the remote path |
+| `signal` | `AbortSignal` | — | Cancel an in-flight compile. See [cancellation](/guides/cancellation-and-retries/#cancellation) |
+
+<Aside type="note">
+  `PlatexClientConfig` (what `createPlatexClient` accepts) is `CompileOptions`
+  minus `files` and `signal` — those only make sense per call.
+</Aside>
+
+### Engine
+
+`engine` selects the TeX binary used for **local** compiles with system TeX
+Live. On the remote service and the bundled fallback, compilation is always
+Tectonic (XeTeX-based), so this option has no effect there.
+
+### Passes
+
+`'auto'` (the default) runs LaTeX, inspects the log and `.aux` for rerun
+signals (cross-references, labels, hyperref outlines, natbib, longtable), runs
+bibliography if needed, and re-runs until output stabilizes. Pin it to `1`, `2`,
+or `3` if you want a fixed number of passes.
+
+## Input-size limits
+
+`limits` caps the size of what you feed in. Defaults:
+
+| Field | Default | Description |
+|---|---|---|
+| `maxSourceBytes` | `5_000_000` | Max size of `source`, in UTF-8 bytes |
+| `maxFilesCount` | `50` | Max number of entries in `files` |
+| `maxTotalFilesBytes` | `25_000_000` | Max combined decoded size of all `files` entries |
+
+```typescript
+// A client with a bigger budget for large multi-chapter documents
+const platex = createPlatexClient({
+  limits: { maxSourceBytes: 20_000_000, maxTotalFilesBytes: 100_000_000 },
+});
+```
+
+<Aside type="caution" title="Client limits can't raise server limits">
+  Passing `limits` to a **remote** call is a client-side pre-check only — it
+  changes what your own app accepts before sending, but can never raise what the
+  server enforces. Configure the server's own limits when you deploy it; see
+  [Server configuration](/deployment/server-config/).
+</Aside>
+
+## The result
+
+```typescript
+interface CompileResult {
+  pdf: Buffer | null;       // null on fatal compile error
+  errors: LatexError[];     // structured, with file + line
+  warnings: LatexWarning[]; // overfull boxes, undefined refs, etc.
+  logs: RawPassLog[];       // per-pass raw .log content for debugging
+}
+```
+
+Always check `result.pdf` before using it — it's `null` when compilation failed
+fatally, and `result.errors` tells you why.
+
+```typescript
+const result = await platex.compile(source);
+if (!result.pdf) {
+  for (const err of result.errors) {
+    console.error(`${err.file}:${err.line} — ${err.message}`);
+  }
+  return;
+}
+```
+
+<Aside type="tip">
+  Buffers aren't serializable across the server/client boundary (Server Actions,
+  JSON responses). Base64-encode: `result.pdf.toString('base64')`, and decode
+  with a data URI `data:application/pdf;base64,${b64}`.
+</Aside>
+
+See the [API reference](/api-reference/#compileresult) for the full `LatexError`,
+`LatexWarning`, and `RawPassLog` shapes.
+
+## Where to next
+
+<LinkCard title="Files & bibliography" href="/guides/files-and-bibliography/" description="Attach .bib files, images, and sub-documents." />
+<LinkCard title="Cancellation, retries & timeouts" href="/guides/cancellation-and-retries/" description="Abort in-flight compiles and handle transient failures." />
+<LinkCard title="Request handlers" href="/guides/request-handlers/" description="Turn compile() into an HTTP endpoint in one line." />

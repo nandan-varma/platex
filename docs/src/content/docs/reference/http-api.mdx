@@ -1,0 +1,110 @@
+---
+title: HTTP API
+description: The endpoints, request/response wire formats, and status codes the platex service speaks.
+sidebar:
+  label: HTTP API
+---
+
+import { Aside, LinkCard } from '@astrojs/starlight/components';
+
+The platex service exposes a tiny HTTP API. You rarely call it directly — the
+client library and request handlers speak it for you — but here's the wire format
+for building requests by hand, debugging, or writing a client in another
+language.
+
+## Endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/compile` | Compile LaTeX. Body: `CompileRequest` JSON. Response: `CompileResponse` JSON |
+| `GET` | `/health` | Health check. Returns `{ "status": "ok" }` (never requires auth) |
+
+## `POST /compile`
+
+### Request body
+
+```typescript
+interface CompileRequest {
+  source: string;                     // LaTeX source (main.tex content)
+  engine: 'pdflatex' | 'xelatex' | 'lualatex';
+  passes: 'auto' | 1 | 2 | 3;
+  bibliography: 'bibtex' | 'biber' | 'none';
+  files: Record<string, string>;     // filename → base64-encoded content
+  timeout: number;                    // milliseconds, overall pipeline budget, capped at 120s
+}
+```
+
+Only `source` is required in practice — the handler fills in defaults for the
+rest. `files` values are **base64-encoded** on the wire (unlike the library's
+`Buffer` values, which are encoded for you).
+
+<Aside type="note">
+  `timeout` is capped at **120 s** by the service schema regardless of what a
+  client requests, bounding total server-side time per request.
+</Aside>
+
+### Response body
+
+```typescript
+interface CompileResponse {
+  pdf: string | null;         // base64-encoded PDF, or null on fatal error
+  errors: LatexError[];
+  warnings: LatexWarning[];
+  logs: RawPassLog[];
+}
+```
+
+See the [API reference](/api-reference/#latexerror) for `LatexError`,
+`LatexWarning`, and `RawPassLog`.
+
+### Status codes
+
+| Status | Meaning |
+|---|---|
+| `200` | Compiled (check `pdf` for `null` on fatal LaTeX errors) |
+| `400` | Malformed request body |
+| `401` | Missing/invalid bearer token (when `PLATEX_API_KEY` is set) |
+| `413` | Request body exceeds `maxRequestBodyBytes` |
+| `503` | Instance at `maxConcurrentCompiles` — retry shortly |
+
+<Aside type="tip">
+  When calling through `handleCompileRequest` with the default `responseFormat: 'pdf'`,
+  your app-facing route returns raw PDF bytes at `200` and `{ errors, warnings }`
+  at `422` instead — that's the handler's shaping on top of this raw service API.
+  See [Request handlers](/guides/request-handlers/).
+</Aside>
+
+## Authentication
+
+If the service is started with `PLATEX_API_KEY` set, `POST /compile` requires:
+
+```
+Authorization: Bearer <key>
+```
+
+`GET /health` never requires auth. See
+[Server configuration](/deployment/server-config/#authentication).
+
+## Examples
+
+Compile and extract the PDF:
+
+```bash
+curl -X POST https://platex.example.com/compile \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $PLATEX_API_KEY" \
+  -d '{"source": "\\documentclass{article}\\begin{document}Hi\\end{document}"}' \
+  | jq -r '.pdf' | base64 -d > output.pdf
+```
+
+Health check:
+
+```bash
+curl https://platex.example.com/health
+# → {"status":"ok"}
+```
+
+## See also
+
+<LinkCard title="Server configuration" href="/deployment/server-config/" description="Auth, concurrency, and body-size caps." />
+<LinkCard title="Request handlers" href="/guides/request-handlers/" description="The app-facing handler that speaks this API for you." />

@@ -1,0 +1,93 @@
+---
+title: Edge & serverless
+description: Use the remote-only @nandan-varma/platex/client on the Edge Runtime, Cloudflare Workers, Bun, Deno, and browsers.
+sidebar:
+  label: Edge & serverless
+---
+
+import { Aside, LinkCard } from '@astrojs/starlight/components';
+
+TeX can't run on the edge — there's no child process to spawn. platex handles
+this with a dedicated edge-safe entry point that only ever talks to the remote
+service.
+
+## `@nandan-varma/platex/client`
+
+This entry point exposes the same client and handler API as the Node entry, but
+**remote-only**. It never imports `node:child_process`, `node:fs`, or `node:os`,
+so it's safe to bundle for any runtime with a global `fetch`:
+
+- Vercel / Next.js Edge Runtime
+- Cloudflare Workers
+- Bun and Deno
+- Browsers
+
+```typescript title="app/api/compile/route.ts — Edge Runtime"
+export const runtime = 'edge';
+import { handleCompileRequest } from '@nandan-varma/platex/client';
+
+export const POST = handleCompileRequest;
+```
+
+Or with a configured client:
+
+```typescript
+export const runtime = 'edge';
+import { createPlatexClient, createRequestHandler } from '@nandan-varma/platex/client';
+
+const platex = createPlatexClient({ timeout: 20_000, retry: 2 });
+export const POST = createRequestHandler(platex);
+```
+
+## A `serviceUrl` is required
+
+Because there's no local compilation on the edge, the client needs a service to
+call. If you invoke `.compile()` without a `serviceUrl` configured (and none in
+`PLATEX_SERVICE_URL`), it **throws immediately** with a clear message telling you
+what's missing — rather than trying, and failing, to spawn a TeX process that
+can't exist on that runtime.
+
+```typescript
+import { createPlatexClient } from '@nandan-varma/platex/client';
+
+const platex = createPlatexClient({
+  serviceUrl: 'https://your-platex-service.vercel.app',
+});
+```
+
+<Aside type="tip">
+  Set `PLATEX_SERVICE_URL` in your edge environment and you can omit
+  `serviceUrl` entirely — it's read automatically, same as on Node.
+</Aside>
+
+## Node vs edge, side by side
+
+| | `@nandan-varma/platex` | `@nandan-varma/platex/client` |
+|---|---|---|
+| Runtime | Node.js | anything with `fetch` |
+| Local compilation | ✅ system TeX / bundled Tectonic | ❌ never |
+| Remote compilation | ✅ | ✅ |
+| Node built-ins imported | yes | **none** |
+| No `serviceUrl` behavior | falls back to local compile | throws a clear error |
+
+<Aside type="note">
+  Both entry points export the same names — `compile`, `createPlatexClient`,
+  `handleCompileRequest`, `createRequestHandler` — so moving a route between Node
+  and edge is usually just a matter of changing the import specifier (and
+  ensuring a `serviceUrl` is set).
+</Aside>
+
+## Verifying edge-safety
+
+If you're contributing or bundling manually, you can confirm the client build
+pulls in no Node built-ins after building:
+
+```bash
+grep -n "require(\|from '" dist/client.js   # should show no node: specifiers
+```
+
+## Where to next
+
+<LinkCard title="Framework recipes" href="/frameworks/" description="Drop-in handlers for every framework." />
+<LinkCard title="How it works" href="/guides/how-it-works/" description="The three entry points and how they differ." />
+<LinkCard title="Deploy the service" href="/deployment/service/" description="Stand up the service your edge client calls." />

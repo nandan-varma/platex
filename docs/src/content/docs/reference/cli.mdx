@@ -1,0 +1,85 @@
+---
+title: CLI reference
+description: The platex binary — usage, every flag, stdin, JSON output, and exit codes.
+sidebar:
+  label: CLI reference
+---
+
+import { LinkCard, Aside } from '@astrojs/starlight/components';
+
+The compact reference for the `platex` binary. For a walkthrough with examples
+and watch mode, see [CLI & watch mode](/guides/cli/).
+
+## Usage
+
+```
+platex <input.tex> [options]
+```
+
+Compile a LaTeX file to PDF — locally via system TeX Live or the bundled
+Tectonic binary, or remotely via a platex HTTP service. Pass `-` as the input to
+read LaTeX source from stdin.
+
+```bash
+npx @nandan-varma/platex main.tex     # → main.pdf (no TeX install required)
+```
+
+## Options
+
+| Flag | Argument | Default | Description |
+|---|---|---|---|
+| `-o, --output` | `<path>` | input with `.pdf` | Output PDF path (directories are created) |
+| `-e, --engine` | `<name>` | `pdflatex`¹ | `pdflatex` \| `xelatex` \| `lualatex` \| `tectonic` |
+| `-p, --passes` | `<n>` | `auto` | `auto` \| `1` \| `2` \| `3` |
+| `-b, --bib` | `<name>` | `bibtex` | `bibtex` \| `biber` \| `none` |
+| `-f, --file` | `<path>` | — | Attach a file or directory (repeatable); directories are walked recursively |
+| `-t, --timeout` | `<ms>` | `30000` | Overall wall-clock budget for the whole pipeline |
+| `-s, --service-url` | `<url>` | `PLATEX_SERVICE_URL` | Compile via a remote platex service |
+| `--api-key` | `<key>` | `PLATEX_API_KEY` | Bearer token for the remote service |
+| `--retry` | `<n>` | `0` | Extra attempts on retryable remote failures |
+| `-w, --watch` | — | off | Recompile whenever the input or attached files change |
+| `--json` | — | off | Print the full `CompileResult` as JSON (`pdf` base64-encoded); writes the PDF file only with `-o` |
+| `-q, --quiet` | — | off | Only print errors |
+| `-h, --help` | — | — | Show help |
+| `-V, --version` | — | — | Print the version |
+
+¹ The engine only affects local system-TeX compiles; remote and bundled compiles
+are always Tectonic.
+
+<Aside type="note">
+  Flags map 1:1 onto [`CompileOptions`](/api-reference/#compileoptions). `-f`
+  builds `files` (keyed relative to the input's directory; directory contents
+  keyed relative to the directory itself), `-s`/`--api-key` map to
+  `serviceUrl`/`apiKey`, and so on.
+</Aside>
+
+## File attachment keys
+
+- A **single file** `-f refs.bib` is keyed relative to the **input file's directory**.
+- A **directory** `-f figures/` is walked recursively; each file is keyed relative to **that directory**.
+- Files outside the input's directory tree fall back to their basename.
+
+## stdin
+
+Pass `-` to read source from stdin. `--watch` cannot be combined with stdin
+(there's no file to watch) and exits with a usage error.
+
+```bash
+cat main.tex | platex - -o main.pdf
+```
+
+## Exit codes
+
+| Code | Meaning |
+|---|---|
+| `0` | Success |
+| `1` | Compile failed (errors printed with `file:line` locations) |
+| `2` | Usage or environment error |
+
+<kbd>Ctrl-C</kbd> aborts the in-flight compile cleanly — no orphaned TeX
+processes.
+
+## See also
+
+<LinkCard title="CLI & watch mode" href="/guides/cli/" description="Examples, watch mode, and JSON output." />
+<LinkCard title="API reference" href="/api-reference/" description="The CompileOptions these flags map to." />

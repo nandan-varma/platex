@@ -34,3 +34,16 @@ export default async function Page() {
   return <embed src={pdfDataUri ?? undefined} type="application/pdf" />;
 }
 ```
+
+:::caution
+`compile()` here runs locally (no `serviceUrl`), so it spawns a child process
+and must use `runtime = 'nodejs'`. To compile on the edge, set a
+`serviceUrl`/`PLATEX_SERVICE_URL` and use `@nandan-varma/platex/client` — see
+[Edge & serverless](/frameworks/edge/).
+:::
+
+## See also
+
+- [Compiling LaTeX](/guides/compiling/) — every option on `compile()`.
+- [Files & bibliography](/guides/files-and-bibliography/) — how the `files` map works.
+- [Client Components](/rendering/csr/) — compile on demand from the browser instead.

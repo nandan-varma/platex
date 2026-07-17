@@ -1,71 +1,137 @@
 ---
 title: platex
-description: Compile LaTeX to PDF in TypeScript, built for Next.js.
+description: Compile LaTeX to PDF in TypeScript. Works in any framework that speaks the Fetch API — on Node.js or the edge.
 template: splash
 hero:
   tagline: >-
-    Accurate LaTeX-to-PDF output — a library that runs anywhere
-    Node.js runs, on Vercel or self-hosted.
+    Compile LaTeX to PDF in TypeScript, with output as accurate as your local
+    TeX toolchain. One function, any framework, Node.js or the edge.
   actions:
     - text: Get started
       link: /installation/
       icon: right-arrow
-    - text: API reference
-      link: /api-reference/
-      icon: open-book
+    - text: Quick start
+      link: /quick-start/
+      icon: rocket
+      variant: minimal
+    - text: View on GitHub
+      link: https://github.com/nandan-varma/platex
+      icon: external
       variant: minimal
 ---
 
-import { Card, CardGrid } from '@astrojs/starlight/components';
+import { Card, CardGrid, LinkCard, Tabs, TabItem } from '@astrojs/starlight/components';
 
 ## What it is
 
-`@nandan-varma/platex` compiles LaTeX to PDF from TypeScript. The entire public
-surface is one function — `compile()` — and every rendering pattern below calls
-it the same way.
+`@nandan-varma/platex` compiles LaTeX to PDF from TypeScript. It works in any
+framework that speaks the [Fetch API](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API)
+— Next.js, TanStack Start, Astro, SvelteKit, Remix, Bun, Deno, Cloudflare
+Workers — on Node.js or the edge. Nothing is hardcoded: every engine, timeout,
+limit, auth token, and retry setting is an option with a sane default and an
+env-var fallback.
 
 ```bash
 npm install @nandan-varma/platex
 ```
 
+<Tabs>
+  <TabItem label="One call">
+
 ```typescript
 import { compile } from '@nandan-varma/platex';
 
 const result = await compile(source, {
-  engine: 'pdflatex',
-  serviceUrl: process.env.PLATEX_SERVICE_URL,
+  serviceUrl: process.env.PLATEX_SERVICE_URL, // omit — read automatically
 });
 
 if (result.pdf) {
-  // result.pdf is a Buffer
+  // result.pdf is a Buffer — return, save, or stream it
 }
 ```
+
+  </TabItem>
+  <TabItem label="Reusable client">
+
+```typescript
+// lib/platex.ts
+import { createPlatexClient } from '@nandan-varma/platex';
+
+export const platex = createPlatexClient({ timeout: 25_000, retry: 2 });
+
+// anywhere
+const result = await platex.compile(source);
+```
+
+  </TabItem>
+  <TabItem label="Drop-in route">
+
+```typescript
+// app/api/compile/route.ts (Next.js)
+import { handleCompileRequest } from '@nandan-varma/platex';
+
+export const POST = handleCompileRequest;
+```
+
+  </TabItem>
+  <TabItem label="CLI">
+
+```bash
+npx @nandan-varma/platex main.tex        # → main.pdf, no TeX install needed
+platex main.tex --watch                  # recompile on save
+```
+
+  </TabItem>
+</Tabs>
+
+## Why platex
 
 <CardGrid>
   <Card title="Accurate PDF output" icon="document">
     Standard engine flags, multi-pass logic, and rerun heuristics for
-    faithful LaTeX-to-PDF rendering.
+    faithful LaTeX-to-PDF rendering — as accurate as your local TeX toolchain.
+  </Card>
+  <Card title="Runs anywhere" icon="rocket">
+    Node.js or the edge. Three entry points: a full Node library, an
+    edge-safe remote-only client, and a server factory to embed the API.
   </Card>
   <Card title="Two deployment targets" icon="puzzle">
     A remote service for Vercel (bundled Tectonic), or full TeX Live
-    locally / self-hosted.
+    locally / self-hosted — the same library auto-selects.
   </Card>
   <Card title="Structured diagnostics" icon="list-format">
     Errors and warnings parsed from raw TeX logs, with file, line, and
-    category.
+    category — plus per-pass raw logs for debugging.
   </Card>
-  <Card title="Every rendering pattern" icon="seti:tsx">
-    Server Components, Client Components, Server Actions, and Route Handlers
-    all work the same way.
+  <Card title="A real CLI" icon="seti:powershell">
+    The same pipeline as a `platex` binary — watch mode, extra files,
+    remote compilation, stdin, and JSON output.
+  </Card>
+  <Card title="Zero config" icon="setting">
+    Set `PLATEX_SERVICE_URL` and go. Every option is optional, overridable
+    per call, per client, or per deployment.
   </Card>
 </CardGrid>
 
-## Rendering patterns
+## Start here
 
-The same `compile()` call works across every natural Next.js integration point.
-Each pattern has its own page with a complete code sample:
+<CardGrid>
+  <LinkCard title="Installation" href="/installation/" description="Deploy the service and install the client library." />
+  <LinkCard title="Quick start" href="/quick-start/" description="From npm install to your first PDF in a few minutes." />
+  <LinkCard title="How it works" href="/guides/how-it-works/" description="Deployment modes, entry points, and what Tectonic is." />
+  <LinkCard title="Compiling LaTeX" href="/guides/compiling/" description="The compile() API, the reusable client, and every option." />
+  <LinkCard title="CLI & watch mode" href="/guides/cli/" description="Drive the same pipeline from any shell or script." />
+  <LinkCard title="API reference" href="/api-reference/" description="Every type, option, and default in one place." />
+</CardGrid>
+
+## Framework integrations
+
+The same `handleCompileRequest` handler — a standard `Request` → `Response`
+function — works in every framework. Next.js also gets a dedicated page per
+rendering pattern:
 
 - [Server Components](/rendering/ssr/) — `compile()` runs during the server render; the PDF ships in the initial HTML.
 - [Client Components](/rendering/csr/) — edit LaTeX in the browser and compile on demand via `fetch`.
 - [Server Actions](/rendering/server-actions/) — a form submits straight to a `'use server'` function.
-- [Route Handlers](/rendering/route-handlers/) — the raw Node.js API route backing the other patterns.
+- [Route Handlers](/rendering/route-handlers/) — the raw HTTP endpoint backing the other patterns.
+- [Other frameworks](/frameworks/) — Astro, SvelteKit, Remix, TanStack Start, Bun, Deno, Hono, Cloudflare Workers.

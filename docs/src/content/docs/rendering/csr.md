@@ -38,3 +38,13 @@ export function Compiler({ initialSource }: { initialSource: string }) {
   );
 }
 ```
+
+This posts to a route that returns `{ pdf: base64, ... }`. Back that route with
+the drop-in [`handleCompileRequest`](/guides/request-handlers/) using
+`responseFormat: 'json'`, or the hand-written [Route Handler](/rendering/route-handlers/).
+
+## See also
+
+- [Route Handlers](/rendering/route-handlers/) — the endpoint this component calls.
+- [Request handlers](/guides/request-handlers/) — the one-line handler and JSON mode.
+- [Cancellation, retries & timeouts](/guides/cancellation-and-retries/) — abort an in-flight `fetch`.

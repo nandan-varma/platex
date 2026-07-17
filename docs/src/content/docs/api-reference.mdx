@@ -1,0 +1,208 @@
+---
+title: API Reference
+description: Every exported function, option, and type — compile, createPlatexClient, handleCompileRequest, and the result shapes.
+---
+
+import { Aside, LinkCard } from '@astrojs/starlight/components';
+
+The full public surface of `@nandan-varma/platex`. For guided explanations, see
+[Compiling LaTeX](/guides/compiling/); for the CLI, see the
+[CLI reference](/reference/cli/); for the service, the [HTTP API](/reference/http-api/).
+
+## Exports
+
+| Export | Entry points | Description |
+|---|---|---|
+| `compile(source, options?)` | Node | Compile LaTeX; the core function |
+| `createPlatexClient(config?)` | Node, `/client` | Build a reusable client with baked-in defaults |
+| `handleCompileRequest(request, options?)` | Node, `/client` | `Request` → `Response` handler |
+| `createRequestHandler(client, options?)` | Node, `/client` | Bind a handler to a specific client |
+| `createApp(config?)` | `/server` | Hono app factory for the HTTP service |
+| `createCompileRoute(config?)` | `/server` | Just the `POST /compile` route |
+
+All types below are exported too (`CompileOptions`, `CompileResult`, `CompileLimits`,
+`PlatexClient`, `PlatexClientConfig`, `LatexError`, `LatexWarning`, `RawPassLog`,
+`Engine`, `BibEngine`, `PassCount`, `WarningCode`).
+
+## `compile(source, options?)`
+
+```typescript
+function compile(source: string, options?: CompileOptions): Promise<CompileResult>;
+```
+
+`source` is the `main.tex` content. Resolves to a [`CompileResult`](#compileresult).
+Compiles remotely when a `serviceUrl` resolves, otherwise locally (Node entry
+only).
+
+## `CompileOptions`
+
+Accepted per-call by `compile()`, and (minus `files`/`signal`) as defaults by
+`createPlatexClient`.
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `engine` | `'pdflatex' \| 'xelatex' \| 'lualatex'` | `'pdflatex'` | TeX engine for local system-TeX compiles; Tectonic is always XeTeX-based |
+| `passes` | `'auto' \| 1 \| 2 \| 3` | `'auto'` | `'auto'` reruns until output is stable |
+| `bibliography` | `'bibtex' \| 'biber' \| 'none'` | `'bibtex'` | Bibliography engine |
+| `files` | `Record<string, Buffer>` | `{}` | Additional files: `.bib`, images, included `.tex` files |
+| `serviceUrl` | `string` | `PLATEX_SERVICE_URL` | URL of the platex service. If unset, compiles locally |
+| `apiKey` | `string` | `PLATEX_API_KEY` | Sent as `Authorization: Bearer <apiKey>` to the service |
+| `headers` | `Record<string, string>` | `{}` | Extra headers merged into the remote request |
+| `timeout` | `number` | `30000` | Overall wall-clock budget (ms) for the *entire* pipeline — not per-process |
+| `limits` | `CompileLimits` | [see below](#compilelimits) | Input-size ceilings for this call |
+| `retry` | `number` | `0` | Extra attempts on retryable *remote* failures (network, timeout, 5xx). Never on 4xx or abort |
+| `fetch` | `typeof fetch` | global `fetch` | Custom fetch implementation for the remote path |
+| `signal` | `AbortSignal` | — | Cancel an in-flight compile |
+
+<Aside type="note">
+  With `exactOptionalPropertyTypes`, optional fields like `signal` are typed
+  `T | undefined`. `PlatexClientConfig = Omit<CompileOptions, 'files' | 'signal'>`.
+</Aside>
+
+## `CompileLimits`
+
+```typescript
+interface CompileLimits {
+  maxSourceBytes?: number;      // default 5_000_000 — max source, UTF-8 bytes
+  maxFilesCount?: number;       // default 50 — max entries in `files`
+  maxTotalFilesBytes?: number;  // default 25_000_000 — combined decoded size of all files
+}
+```
+
+Only meaningful for local compilation and the server's own enforcement. A remote
+client cannot raise the server's limits by passing these; see
+[Server configuration](/deployment/server-config/#limits-are-server-authoritative).
+
+## `createPlatexClient(config?)`
+
+```typescript
+function createPlatexClient(config?: PlatexClientConfig): PlatexClient;
+
+interface PlatexClient {
+  compile(source: string, options?: CompileOptions): Promise<CompileResult>;
+  health(): Promise<boolean>; // pings GET <serviceUrl>/health; true immediately if no serviceUrl
+}
+```
+
+`config` accepts everything in `CompileOptions` except `files` and `signal`.
+Returns plain functions — destructuring works, no `this` binding required.
+
+## `handleCompileRequest(request, options?)`
+
+```typescript
+function handleCompileRequest(
+  request: Request,
+  options?: CompileOptions & { responseFormat?: 'pdf' | 'json' },
+): Promise<Response>;
+```
+
+Parses the JSON body, calls `compile()`, returns a `Response`.
+
+| `responseFormat` | Success | Failure |
+|---|---|---|
+| `'pdf'` *(default)* | `200`, raw PDF bytes (`application/pdf`) | `422`, JSON `{ errors, warnings }` |
+| `'json'` | `200`, `{ pdf: base64 \| null, errors, warnings }` | `200`, `{ pdf: null, errors, warnings }` |
+
+Other statuses: `400` for bad input, `502` if the remote service is unreachable.
+
+**Request body:** `{ source: string, engine?, passes?, bibliography?, files?: Record<string, base64>, timeout? }` — only `source` is required.
+
+`createRequestHandler(client, options?)` binds the same behavior to a specific
+`PlatexClient`.
+
+## `CompileResult`
+
+```typescript
+interface CompileResult {
+  pdf: Buffer | null;       // null on fatal compile error
+  errors: LatexError[];     // structured errors with file + line number
+  warnings: LatexWarning[]; // overfull boxes, undefined refs, etc.
+  logs: RawPassLog[];       // per-pass raw .log content for debugging
+}
+```
+
+### `LatexError`
+
+```typescript
+interface LatexError {
+  type: 'error';
+  file: string | null;
+  line: number | null;
+  message: string;
+  context: string | null;             // surrounding lines from the TeX log
+  source: 'latex' | 'bibtex' | 'biber';
+}
+```
+
+### `LatexWarning`
+
+```typescript
+interface LatexWarning {
+  type: 'warning';
+  code: WarningCode;
+  file: string | null;
+  line: number | null;
+  message: string;
+}
+
+type WarningCode =
+  | 'overfull-hbox' | 'underfull-hbox'
+  | 'overfull-vbox' | 'underfull-vbox'
+  | 'undefined-reference' | 'undefined-citation'
+  | 'multiply-defined-label'
+  | 'font-warning' | 'package-warning' | 'other';
+```
+
+### `RawPassLog`
+
+```typescript
+interface RawPassLog {
+  passNumber: number;
+  engine: Engine | 'bibtex' | 'biber';
+  stdout: string;
+  stderr: string;
+  log: string;      // raw .log content
+  exitCode: number;
+  timedOut: boolean; // true if this pass was killed for exceeding its time budget
+}
+```
+
+## Type aliases
+
+```typescript
+type Engine = 'pdflatex' | 'xelatex' | 'lualatex' | 'tectonic';
+type BibEngine = 'bibtex' | 'biber' | 'none';
+type PassCount = 'auto' | 1 | 2 | 3;
+```
+
+## Server factories
+
+The `@nandan-varma/platex/server` entry point exports `createApp(config?)` and
+`createCompileRoute(config?)`. Their config (`apiKey`, `maxConcurrentCompiles`,
+`limits`, `maxRequestBodyBytes`) is documented on
+[Server configuration](/deployment/server-config/).
+
+## Example: additional files
+
+`files` keys become filenames inside the compilation sandbox — use this for
+`.bib` files, images, or any `\input`-ed sub-document.
+
+```typescript
+import { readFile } from 'node:fs/promises';
+import { compile } from '@nandan-varma/platex';
+
+const result = await compile(source, {
+  bibliography: 'bibtex',
+  files: {
+    'refs.bib': await readFile('refs.bib'),
+    'figures/logo.png': await readFile('logo.png'),
+  },
+  serviceUrl: process.env.PLATEX_SERVICE_URL,
+});
+```
+
+## See also
+
+<LinkCard title="Compiling LaTeX" href="/guides/compiling/" description="Guided tour of the options." />
+<LinkCard title="CLI reference" href="/reference/cli/" description="The flag table and exit codes." />
+<LinkCard title="HTTP API" href="/reference/http-api/" description="The service's endpoints and wire format." />

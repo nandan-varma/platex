@@ -1,0 +1,82 @@
+---
+title: Self-hosting with Docker
+description: Run the platex service with full TeX Live for maximum output accuracy.
+sidebar:
+  label: Self-hosting with Docker
+---
+
+import { Steps, Aside, LinkCard } from '@astrojs/starlight/components';
+
+If you're not on Vercel — or you want the highest-fidelity output — run the
+service from the Docker image. It's built on the official
+`texlive/texlive:latest` image and compiles with **full TeX Live**
+(pdflatex / xelatex / lualatex) rather than Tectonic.
+
+## Build and run
+
+<Steps>
+
+1. **Build the server bundle and image.**
+
+   ```bash
+   npm run build:server
+   docker build -f docker/Dockerfile -t platex .
+   ```
+
+2. **Run it.**
+
+   ```bash
+   docker run -p 3001:3001 platex
+   ```
+
+   Or with Docker Compose:
+
+   ```bash
+   docker compose -f docker/docker-compose.yml up
+   ```
+
+3. **Point your app at it.**
+
+   ```bash
+   PLATEX_SERVICE_URL=http://localhost:3001
+   ```
+
+</Steps>
+
+<Aside type="note">
+  `build:server` (the Docker bundle → `dist/server.cjs`) is separate from
+  `build:vercel` (which also downloads the Tectonic binary). The Docker image
+  relies on TeX Live already present in the base image, so it doesn't bundle
+  Tectonic.
+</Aside>
+
+## Why full TeX Live
+
+With system TeX Live available, the library runs the real engines natively:
+
+- **Same engine flags** as a local build: `-interaction=nonstopmode -halt-on-error -file-line-error`
+- **Real multi-pass logic:** detects `\citation{}` in the `.aux`, runs bibtex/biber, re-runs LaTeX until cross-references and labels stabilize
+- **All three engines:** `pdflatex`, `xelatex`, and `lualatex`, selectable per call via the `engine` option
+- **pdflatex font metrics** — the small differences that XeTeX-based Tectonic can introduce are gone
+
+This is the mode to choose when output must match a specific local TeX toolchain
+exactly. See [How output accuracy works](/guides/how-it-works/#how-output-accuracy-works).
+
+## Configuration
+
+The container is zero-config — it reads environment variables, so a deployment
+needs nothing but `docker run`:
+
+```bash
+docker run -p 3001:3001 \
+  -e PLATEX_API_KEY=your-secret-key \
+  -e PLATEX_MAX_CONCURRENT=8 \
+  platex
+```
+
+See [Server configuration](/deployment/server-config/) for every setting.
+
+## Where to next
+
+<LinkCard title="Server configuration" href="/deployment/server-config/" description="Auth, concurrency, limits, and body-size caps." />
+<LinkCard title="Deploy the service" href="/deployment/service/" description="The Vercel and bundled-server paths." />

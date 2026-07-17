@@ -1,0 +1,143 @@
+---
+title: Files & bibliography
+description: Attach .bib files, images, and \input-ed sub-documents, and control the bibliography engine.
+---
+
+import { Aside, FileTree, Tabs, TabItem, LinkCard } from '@astrojs/starlight/components';
+
+Real documents are more than one `.tex` file — they pull in bibliographies,
+images, and included sub-documents. The `files` option carries all of them into
+the compilation sandbox.
+
+## Attaching files
+
+`files` is a `Record<string, Buffer>`. Each **key becomes a filename inside the
+sandbox**, so your LaTeX references them by exactly that name.
+
+```typescript
+import { readFile } from 'node:fs/promises';
+import { compile } from '@nandan-varma/platex';
+
+const result = await compile(source, {
+  bibliography: 'bibtex',
+  files: {
+    'refs.bib': await readFile('refs.bib'),
+    'figures/logo.png': await readFile('logo.png'),
+    'chapters/intro.tex': await readFile('intro.tex'),
+  },
+});
+```
+
+Given the keys above, your source uses them directly:
+
+```latex
+\includegraphics{figures/logo.png}
+\input{chapters/intro}
+\bibliography{refs}
+```
+
+Which maps to this sandbox layout:
+
+<FileTree>
+- main.tex        (your `source`)
+- refs.bib
+- figures/
+  - logo.png
+- chapters/
+  - intro.tex
+</FileTree>
+
+<Aside type="caution" title="Filenames are validated">
+  Path-traversal filenames (e.g. `../secret`) are rejected in both the HTTP
+  route and the library. Keep keys relative and inside the sandbox.
+</Aside>
+
+### Over HTTP
+
+When sending files to the remote service (or through a request handler),
+`Buffer` values are transported as **base64 strings** on the wire:
+
+```typescript
+files: {
+  'refs.bib': bibBuffer.toString('base64'),
+  'logo.png': logoBuffer.toString('base64'),
+}
+```
+
+The library handles this conversion for you when you call `compile()` with real
+`Buffer`s; you only base64-encode manually when constructing an HTTP request
+body by hand. See the [HTTP API](/reference/http-api/).
+
+## Bibliography
+
+The `bibliography` option chooses the engine used when your document cites
+sources:
+
+| Value | Engine | When to use |
+|---|---|---|
+| `'bibtex'` *(default)* | BibTeX | Classic `\bibliography{}` + `.bst` styles |
+| `'biber'` | Biber | `biblatex`-based documents |
+| `'none'` | — | No bibliography processing |
+
+```typescript
+const result = await compile(source, {
+  bibliography: 'biber',
+  files: { 'refs.bib': await readFile('refs.bib') },
+});
+```
+
+With **local system TeX Live**, platex runs the bibliography tool between LaTeX
+passes: it detects `\citation{}` entries in the `.aux` file, runs bibtex/biber,
+then re-runs LaTeX so citations and the reference list resolve. With
+**Tectonic** (remote/bundled), multi-pass compilation and bibliography are
+handled internally by the engine.
+
+<Aside type="tip">
+  Leave `passes: 'auto'` (the default) so platex reruns until cross-references
+  and citations stabilize. Pinning `passes: 1` will leave `??` in place of
+  unresolved references.
+</Aside>
+
+## A complete example
+
+<Tabs>
+  <TabItem label="Direct call">
+
+```typescript
+import { readFile } from 'node:fs/promises';
+import { compile } from '@nandan-varma/platex';
+
+const source = await readFile('main.tex', 'utf-8');
+
+const result = await compile(source, {
+  bibliography: 'bibtex',
+  files: {
+    'refs.bib': await readFile('refs.bib'),
+    'figures/plot.pdf': await readFile('figures/plot.pdf'),
+  },
+});
+
+if (result.pdf) {
+  await writeFile('out.pdf', result.pdf);
+}
+```
+
+  </TabItem>
+  <TabItem label="CLI">
+
+The CLI walks directories recursively and keys files relative to the input's
+directory:
+
+```bash
+platex main.tex -f refs.bib -f figures/ -b bibtex
+```
+
+See [CLI & watch mode](/guides/cli/) for the details.
+
+  </TabItem>
+</Tabs>
+
+## Where to next
+
+<LinkCard title="Compiling LaTeX" href="/guides/compiling/" description="Every option on compile() explained." />
+<LinkCard title="CLI & watch mode" href="/guides/cli/" description="Attach files and directories from the terminal." />

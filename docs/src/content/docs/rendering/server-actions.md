@@ -41,3 +41,14 @@ export function Form({ initialSource }: { initialSource: string }) {
   );
 }
 ```
+
+:::note
+`Buffer`s aren't serializable across the server/client boundary, so the action
+base64-encodes the PDF (`result.pdf.toString('base64')`) and the client decodes
+it into a `data:` URI.
+:::
+
+## See also
+
+- [Compiling LaTeX](/guides/compiling/) — the `compile()` call inside the action.
+- [Server Components](/rendering/ssr/) — render a PDF without any client interaction.

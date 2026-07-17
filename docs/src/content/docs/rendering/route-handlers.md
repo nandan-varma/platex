@@ -43,3 +43,15 @@ curl -X POST http://localhost:3000/api/compile \
   -d '{"source": "\\documentclass{article}\\begin{document}Hi\\end{document}"}' \
   | jq -r '.pdf' | base64 -d > output.pdf
 ```
+
+:::tip
+Don't want to hand-write this route? `export const POST = handleCompileRequest`
+does the same thing in one line, and works in every framework — see
+[Request handlers](/guides/request-handlers/) and [Framework recipes](/frameworks/).
+:::
+
+## See also
+
+- [Request handlers](/guides/request-handlers/) — the drop-in handler, response codes, and JSON mode.
+- [Client Components](/rendering/csr/) — the browser UI that calls this route.
+- [HTTP API](/reference/http-api/) — the underlying service wire format.

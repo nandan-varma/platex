@@ -1,0 +1,125 @@
+---
+title: Server configuration
+description: Auth, concurrency limits, input-size ceilings, and body-size caps — via env vars or createApp().
+sidebar:
+  label: Server configuration
+---
+
+import { Tabs, TabItem, Aside, LinkCard } from '@astrojs/starlight/components';
+
+The service is **zero-config by default** — it reads environment variables, so a
+deployment needs nothing but `docker run`. If you're embedding the app in your
+own Node entrypoint, pass the same settings programmatically to `createApp()`
+instead.
+
+## Two ways to configure
+
+<Tabs>
+  <TabItem label="Environment variables">
+
+For the standalone server (`npm run dev`, the Docker image, or
+`node dist/server.cjs`):
+
+```bash
+PLATEX_API_KEY=your-secret-key
+PLATEX_MAX_CONCURRENT=8
+PORT=3001
+```
+
+  </TabItem>
+  <TabItem label="createApp()">
+
+For embedding the HTTP API in your own server:
+
+```typescript
+import { createApp } from '@nandan-varma/platex/server';
+import { serve } from '@hono/node-server';
+
+const app = createApp({
+  apiKey: process.env.PLATEX_API_KEY,   // or your own secrets manager
+  maxConcurrentCompiles: 8,             // scale with your container's CPUs
+  limits: { maxSourceBytes: 20_000_000 },
+  maxRequestBodyBytes: 60_000_000,      // auto-derived from `limits` if omitted
+});
+
+serve({ fetch: app.fetch, port: 3001 });
+```
+
+  </TabItem>
+</Tabs>
+
+<Aside type="note">
+  `createApp()` and `createCompileRoute()` are **factories**, not module-level
+  singletons — each instance gets its own concurrency counter. Create one per
+  server.
+</Aside>
+
+## Settings
+
+| Setting | Env var | Default | Description |
+|---|---|---|---|
+| `apiKey` | `PLATEX_API_KEY` | unset (no auth) | If set, `POST /compile` requires `Authorization: Bearer <key>` |
+| `maxConcurrentCompiles` | `PLATEX_MAX_CONCURRENT` | `4` | Max simultaneous compiles per instance; extra requests get `503` until a slot frees |
+| `limits` | — | [`CompileLimits`](/api-reference/#compilelimits) | Input-size ceilings enforced for **every** request this deployment accepts |
+| `maxRequestBodyBytes` | — | derived from `limits` + margin (~45MB) | Raw request body cap (`413` if exceeded), checked before JSON parsing |
+| `PORT` | `PORT` | `3001` | Port the standalone server listens on |
+
+## Authentication
+
+By default the service has **no auth**. Compiling is CPU-intensive, so set an
+API key (or otherwise restrict network access) before exposing the service
+publicly:
+
+```bash
+PLATEX_API_KEY=your-secret-key
+```
+
+The client sends the matching key as `Authorization: Bearer <key>` — set
+`PLATEX_API_KEY` on the client side too, or pass `apiKey` to
+`createPlatexClient`. The `/health` endpoint **never** requires auth, so uptime
+checks keep working.
+
+## Concurrency
+
+`maxConcurrentCompiles` caps how many compiles run at once on a single instance.
+Additional requests receive `503` until a slot frees, protecting the box from
+being overwhelmed. Scale it with your container's CPU count, and scale
+horizontally (more instances) for more throughput.
+
+## Limits are server-authoritative
+
+The server's `limits` are the ones that actually apply. A remote client's own
+`limits` option is a **client-side pre-check only** — it can lower what the
+client will send, but it can **never raise** what the server enforces. This is
+load-bearing for the "server operator controls server resources" model: your
+deployment decides the real ceilings.
+
+```typescript
+// The server rejects anything over its own limits, regardless of client settings
+const app = createApp({
+  limits: { maxSourceBytes: 10_000_000, maxTotalFilesBytes: 50_000_000 },
+});
+```
+
+`maxRequestBodyBytes` bounds the raw request body before JSON parsing even
+begins (returning `413` if exceeded); it's auto-derived from `limits` with a
+margin, or you can set it explicitly.
+
+## Mounting just the route
+
+If you want the `/compile` route inside an existing Hono app rather than the
+whole `createApp()`, use `createCompileRoute(config)` — it takes the same
+`maxConcurrentCompiles` / `limits` options:
+
+```typescript
+import { Hono } from 'hono';
+import { createCompileRoute } from '@nandan-varma/platex/server';
+
+const app = new Hono();
+app.route('/', createCompileRoute({ maxConcurrentCompiles: 8 }));
+```
+
+## Where to next
+
+<LinkCard title="HTTP API" href="/reference/http-api/" description="Endpoints, request/response shapes, and status codes." />
+<LinkCard title="Deploy the service" href="/deployment/service/" description="Vercel and self-hosted deployment paths." />

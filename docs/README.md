@@ -2,7 +2,8 @@
 
 The documentation site for [`@nandan-varma/platex`](https://github.com/nandan-varma/platex),
 built with [Astro](https://astro.build) + [Starlight](https://starlight.astro.build).
-All content is plain Markdown under `src/content/docs/`.
+Content lives under `src/content/docs/` as Markdown (`.md`) and MDX (`.mdx`,
+for pages that use Starlight components like `Tabs`, `Steps`, and `Aside`).
 
 ## Local development
 
@@ -20,22 +21,41 @@ npm run dev      # http://localhost:4321
 
 ## Editing content
 
-Each page is a Markdown file in `src/content/docs/`:
+Each page is a Markdown/MDX file in `src/content/docs/`:
 
 ```
 src/content/docs/
-  index.mdx                    # landing / overview (splash)
-  installation.md
-  api-reference.md
-  rendering/
-    ssr.md                     # Server Components
-    csr.md                     # Client Components
+  index.mdx                          # landing / overview (splash)
+  installation.mdx
+  quick-start.mdx
+  api-reference.mdx
+  guides/
+    how-it-works.mdx
+    compiling.mdx
+    files-and-bibliography.mdx
+    cancellation-and-retries.mdx
+    request-handlers.mdx
+    cli.mdx                          # CLI & watch mode
+  rendering/                         # Next.js patterns
+    ssr.md                           # Server Components
+    csr.md                           # Client Components
     server-actions.md
     route-handlers.md
+  frameworks/
+    index.mdx                        # framework recipes
+    edge.mdx                         # edge & serverless
+  deployment/
+    service.mdx
+    docker.mdx
+    server-config.mdx
+  reference/
+    cli.mdx                          # CLI reference
+    http-api.mdx                     # HTTP API
 ```
 
 The sidebar and site metadata live in `astro.config.mjs`. Add a page by
-dropping a new `.md` file in and adding a `link` entry to the `sidebar` array.
+dropping a new `.md`/`.mdx` file in and adding a `link` entry to the `sidebar`
+array. Keep pages that import Starlight components as `.mdx`.
 
 ## Deploying to Vercel
 

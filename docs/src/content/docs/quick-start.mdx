@@ -1,0 +1,131 @@
+---
+title: Quick start
+description: From npm install to your first PDF — the reusable client, a drop-in route, and the CLI.
+---
+
+import { Steps, Tabs, TabItem, Aside, LinkCard } from '@astrojs/starlight/components';
+
+This page gets you from install to a rendered PDF. It assumes you've deployed a
+service and set `PLATEX_SERVICE_URL` (see [Installation](/installation/)) — or
+that you're compiling locally, in which case you can leave `serviceUrl` unset
+entirely.
+
+## The recommended pattern: one client, reused everywhere
+
+Create a client once with your defaults baked in, then import it anywhere. This
+keeps `timeout`, `retry`, `apiKey`, and friends in a single place.
+
+<Steps>
+
+1. **Create the client.**
+
+   ```typescript title="lib/platex.ts"
+   import { createPlatexClient } from '@nandan-varma/platex';
+
+   export const platex = createPlatexClient({
+     timeout: 25_000,
+     retry: 2, // retry transient network/5xx failures against the service
+     // engine, passes, bibliography, limits, apiKey, headers... all optional
+   });
+   ```
+
+   `serviceUrl` is read from `PLATEX_SERVICE_URL` automatically — you don't need
+   to pass it.
+
+2. **Use it.** `createPlatexClient` returns plain functions, so destructuring
+   works — no `this` binding required.
+
+   ```typescript
+   import { platex } from '@/lib/platex';
+
+   const result = await platex.compile(source);
+   if (result.pdf) {
+     // result.pdf is a Buffer — return it, save it, stream it
+   }
+   ```
+
+</Steps>
+
+## Return a PDF from a route
+
+<Tabs>
+  <TabItem label="Write it yourself">
+
+```typescript title="app/api/compile/route.ts"
+import { NextResponse } from 'next/server';
+import { platex } from '@/lib/platex';
+
+export const runtime = 'nodejs';
+export const maxDuration = 30;
+
+export async function POST(req: Request) {
+  const { source } = await req.json();
+  const result = await platex.compile(source);
+
+  if (!result.pdf) {
+    return NextResponse.json({ errors: result.errors }, { status: 422 });
+  }
+  return new NextResponse(result.pdf, {
+    headers: { 'Content-Type': 'application/pdf' },
+  });
+}
+```
+
+  </TabItem>
+  <TabItem label="Drop-in handler">
+
+If your route just takes `{ source, ... }` and returns a PDF, skip writing it
+yourself:
+
+```typescript title="app/api/compile/route.ts"
+import { handleCompileRequest } from '@nandan-varma/platex';
+
+export const runtime = 'nodejs';
+export const POST = handleCompileRequest;
+```
+
+It parses the JSON body, calls `compile()`, and returns raw PDF bytes on
+success or structured JSON errors on failure. See
+[Request handlers](/guides/request-handlers/).
+
+  </TabItem>
+  <TabItem label="Bind your client">
+
+Want your client's defaults applied to the drop-in handler? Bind it once:
+
+```typescript title="app/api/compile/route.ts"
+import { createRequestHandler } from '@nandan-varma/platex';
+import { platex } from '@/lib/platex';
+
+export const POST = createRequestHandler(platex);
+```
+
+  </TabItem>
+</Tabs>
+
+<Aside type="caution" title="Use the Node.js runtime for local compilation">
+  When compiling locally (no `serviceUrl`), platex spawns a child process and
+  must run on Node.js. In Next.js, set `export const runtime = 'nodejs'`. For
+  edge routes, use `@nandan-varma/platex/client`, which is remote-only — see
+  [Edge & serverless](/frameworks/edge/).
+</Aside>
+
+## From the terminal
+
+Prefer the shell? The same pipeline ships as a CLI — no TeX installation
+required, thanks to the bundled Tectonic fallback:
+
+```bash
+npx @nandan-varma/platex main.tex             # → main.pdf
+platex main.tex --watch                       # recompile on every save
+platex main.tex -s https://platex.example.com # compile via a remote service
+platex main.tex --json | jq '.errors'         # structured output
+```
+
+<LinkCard title="CLI & watch mode" href="/guides/cli/" description="Every flag, watch mode, stdin, and exit codes." />
+
+## Where to next
+
+<LinkCard title="Compiling LaTeX" href="/guides/compiling/" description="Every option on compile() and the client, explained." />
+<LinkCard title="Files & bibliography" href="/guides/files-and-bibliography/" description="Attach .bib files, images, and \\input-ed sub-documents." />
+<LinkCard title="Next.js rendering patterns" href="/rendering/ssr/" description="Server Components, Client Components, Server Actions, Route Handlers." />

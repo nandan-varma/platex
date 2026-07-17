@@ -1,0 +1,120 @@
+---
+title: Request handlers
+description: Turn compile() into an HTTP endpoint in one line with handleCompileRequest and createRequestHandler.
+---
+
+import { Tabs, TabItem, Aside, LinkCard } from '@astrojs/starlight/components';
+
+If your route just accepts `{ source, ... }` and returns a PDF, you don't need
+to write the handler yourself. `handleCompileRequest` is a standard
+[Fetch API](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API)
+`Request` → `Response` function that works in every framework unmodified.
+
+## `handleCompileRequest`
+
+```typescript title="app/api/compile/route.ts (Next.js)"
+import { handleCompileRequest } from '@nandan-varma/platex';
+
+export const runtime = 'nodejs';
+export const POST = handleCompileRequest;
+```
+
+It parses the JSON body, calls `compile()`, and returns a `Response`:
+
+| Outcome | Status | Body |
+|---|---|---|
+| Success | `200` | Raw PDF bytes, `Content-Type: application/pdf` |
+| Compile failed | `422` | JSON `{ errors, warnings }` |
+| Bad input | `400` | JSON error |
+| Remote service unreachable | `502` | JSON error |
+
+### Request body
+
+```typescript
+{
+  source: string;             // required — the main.tex content
+  engine?: 'pdflatex' | 'xelatex' | 'lualatex';
+  passes?: 'auto' | 1 | 2 | 3;
+  bibliography?: 'bibtex' | 'biber' | 'none';
+  files?: Record<string, string>;  // filename → base64-encoded content
+  timeout?: number;
+}
+```
+
+Only `source` is required.
+
+## JSON responses instead of raw PDF
+
+Pass `responseFormat: 'json'` to always return `200` with a JSON body — useful
+when the client (a browser, a Client Component) wants the PDF as base64
+alongside diagnostics:
+
+```typescript
+import { createRequestHandler, createPlatexClient } from '@nandan-varma/platex';
+
+export const POST = createRequestHandler(createPlatexClient(), {
+  responseFormat: 'json',
+});
+```
+
+```typescript
+// response shape when responseFormat: 'json'
+{ pdf: string | null, errors: LatexError[], warnings: LatexWarning[] }
+```
+
+| `responseFormat` | Success | Failure |
+|---|---|---|
+| `'pdf'` *(default)* | `200`, raw PDF bytes | `422`, JSON `{ errors, warnings }` |
+| `'json'` | `200`, `{ pdf: base64, errors, warnings }` | `200`, `{ pdf: null, errors, warnings }` |
+
+## Applying your client's defaults
+
+`handleCompileRequest` uses the default env-var-driven `compile()`. To apply a
+client's custom `timeout` / `retry` / `apiKey` without repeating them, bind the
+handler to a client with `createRequestHandler`:
+
+```typescript
+import { createPlatexClient, createRequestHandler } from '@nandan-varma/platex';
+
+const platex = createPlatexClient({ timeout: 25_000, retry: 2 });
+export const POST = createRequestHandler(platex);
+```
+
+<Aside type="tip">
+  `createRequestHandler(client, options?)` also accepts the same `responseFormat`
+  option, so you can combine a bound client with JSON responses.
+</Aside>
+
+## Which import?
+
+<Tabs>
+  <TabItem label="Node.js routes">
+
+Use `@nandan-varma/platex` — includes the local-compile fallback.
+
+```typescript
+import { handleCompileRequest } from '@nandan-varma/platex';
+export const runtime = 'nodejs';
+export const POST = handleCompileRequest;
+```
+
+  </TabItem>
+  <TabItem label="Edge routes">
+
+Use `@nandan-varma/platex/client` — remote-only, zero Node built-ins, safe to
+bundle for the edge. Requires a `serviceUrl`.
+
+```typescript
+export const runtime = 'edge';
+import { handleCompileRequest } from '@nandan-varma/platex/client';
+export const POST = handleCompileRequest;
+```
+
+  </TabItem>
+</Tabs>
+
+## Where to next
+
+<LinkCard title="Framework recipes" href="/frameworks/" description="The exact snippet for Astro, SvelteKit, Remix, TanStack, and more." />
+<LinkCard title="Next.js Route Handlers" href="/rendering/route-handlers/" description="A hand-written route and a curl example." />
+<LinkCard title="HTTP API" href="/reference/http-api/" description="The wire format the service and handlers speak." />
