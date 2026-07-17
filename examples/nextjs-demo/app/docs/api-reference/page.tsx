@@ -111,7 +111,7 @@ export default function ApiReferencePage() {
       <CodeBlock
         lang="typescript"
         code={`import { readFile } from 'fs/promises'
-import { compile } from 'platex'
+import { compile } from '@nandan-varma/platex'
 
 const bib = await readFile('refs.bib')
 const logo = await readFile('logo.png')

@@ -1,4 +1,4 @@
-import type { LatexError, LatexWarning } from 'platex';
+import type { LatexError, LatexWarning } from '@nandan-varma/platex';
 import { AlertCircle, TriangleAlert } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';

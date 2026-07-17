@@ -1,7 +1,7 @@
 # platex
 
-[![npm version](https://img.shields.io/npm/v/platex.svg)](https://www.npmjs.com/package/platex)
-[![license](https://img.shields.io/npm/l/platex.svg)](LICENSE)
+[![npm version](https://img.shields.io/npm/v/@nandan-varma/platex.svg)](https://www.npmjs.com/package/@nandan-varma/platex)
+[![license](https://img.shields.io/npm/l/@nandan-varma/platex.svg)](LICENSE)
 
 Compile LaTeX to PDF in TypeScript, with output as close to Overleaf as possible. Designed for Next.js apps on Vercel.
 
@@ -90,7 +90,7 @@ Your service is now live at something like `https://platex-xxx.vercel.app`.
 ### 2. Install the client library in your Next.js app
 
 ```bash
-npm install platex
+npm install @nandan-varma/platex
 ```
 
 ### 3. Set the environment variable
@@ -110,7 +110,7 @@ PLATEX_SERVICE_URL=https://your-platex-service.vercel.app
 ```typescript
 // app/api/compile/route.ts
 import { NextRequest, NextResponse } from 'next/server'
-import { compile } from 'platex'
+import { compile } from '@nandan-varma/platex'
 
 export const runtime = 'nodejs'    // required — not edge
 export const maxDuration = 30
@@ -139,7 +139,7 @@ export async function POST(req: NextRequest) {
 ```typescript
 // app/actions/compile.ts
 'use server'
-import { compile } from 'platex'
+import { compile } from '@nandan-varma/platex'
 
 export async function compileLatex(source: string) {
   const result = await compile(source, {
@@ -161,7 +161,7 @@ export async function compileLatex(source: string) {
 
 ```typescript
 import { readFile } from 'fs/promises'
-import { compile } from 'platex'
+import { compile } from '@nandan-varma/platex'
 
 const bib = await readFile('refs.bib')
 const logo = await readFile('logo.png')

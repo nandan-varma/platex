@@ -5,9 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { CodeBlock } from '@/components/code-block';
 import { NAV } from '@/lib/nav-config';
 
-const INSTALL_SNIPPET = `npm install platex`;
+const INSTALL_SNIPPET = `npm install @nandan-varma/platex`;
 
-const USAGE_SNIPPET = `import { compile } from 'platex'
+const USAGE_SNIPPET = `import { compile } from '@nandan-varma/platex'
 
 const result = await compile(source, {
   engine: 'pdflatex',

@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { compile, type CompileResult } from 'platex';
+import { compile, type CompileResult } from '@nandan-varma/platex';
 
 const DATA_DIR = join(process.cwd(), 'data');
 

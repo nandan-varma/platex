@@ -30,7 +30,7 @@ npx vercel deploy`}
 
       <H2>2. Install the client library</H2>
       <P>In your Next.js app:</P>
-      <CodeBlock lang="bash" code="npm install platex" />
+      <CodeBlock lang="bash" code="npm install @nandan-varma/platex" />
 
       <H2>3. Point the client at the service</H2>
       <P>

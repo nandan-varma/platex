@@ -2,7 +2,7 @@
 // in sync by hand with the actual implementation under app/docs/rendering/*.
 
 export const SSR_SNIPPET = `// app/docs/rendering/ssr/page.tsx
-import { compile } from 'platex';
+import { compile } from '@nandan-varma/platex';
 
 // platex spawns a child process (Tectonic) — must run on Node.js.
 export const runtime = 'nodejs';
@@ -51,7 +51,7 @@ export function Compiler({ initialSource }: { initialSource: string }) {
 
 export const SERVER_ACTION_SNIPPET = `// app/docs/rendering/server-actions/actions.ts
 'use server';
-import { compile } from 'platex';
+import { compile } from '@nandan-varma/platex';
 
 export async function compileAction(_prevState: State, formData: FormData) {
   const source = String(formData.get('source') ?? '');
@@ -80,7 +80,7 @@ export function Form({ initialSource }: { initialSource: string }) {
 
 export const ROUTE_HANDLER_SNIPPET = `// app/api/compile/route.ts
 import { NextResponse } from 'next/server';
-import { compile } from 'platex';
+import { compile } from '@nandan-varma/platex';
 
 export const runtime = 'nodejs';
 
