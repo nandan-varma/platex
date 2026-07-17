@@ -91,6 +91,30 @@ When running on **Vercel with Tectonic**, output is XeTeX-based — nearly
 identical for most documents, with minor differences possible in documents that
 rely on pdflatex-specific font metrics.
 
+## How it stays fast
+
+The multi-pass TeX compilation itself is inherently sequential — each pass
+consumes the previous pass's `.aux`/`.toc` — so platex optimizes everything
+around the engine instead:
+
+- **Parallel I/O.** `main.tex` and all attached files are written concurrently,
+  overlapped with the engine-availability probe; the CLI reads all attachments
+  in parallel too.
+- **Warm-instance fast paths.** Engine lookups (`which`/`where`) are memoized
+  after the first success, and on serverless the staged Tectonic binary in
+  `/tmp` is reused directly — a warm invocation spawns no lookup subprocesses
+  at all. Negative lookups are never cached, so installing TeX mid-session is
+  picked up on the next compile.
+- **Single-pass log parsing.** TeX logs (often thousands of lines, wrapped at
+  column 79) are unwrapped, scope-tracked, and scanned for errors/warnings in
+  one pass, with cheap pre-filters in front of the expensive regexes.
+- **Extra passes only when needed.** With `passes: 'auto'` (the default), the
+  log is checked for rerun hints and a second or third pass runs only if
+  cross-references or the bibliography actually require one.
+- **Lean bundles.** Shipped bundles are minified and tree-shakeable
+  (`sideEffects: false`), and the edge `platex/client` entry contains no Node
+  built-ins.
+
 ## Where to next
 
 <CardGrid>
