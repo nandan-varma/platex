@@ -66,6 +66,10 @@ export function spawnProcess(
 
     const child = spawn(command, args, {
       cwd,
+      // No writes to stdin ever happen; 'ignore' skips allocating the pipe and
+      // gives a TeX engine that tries to prompt an immediate EOF instead of a
+      // read that blocks until the timeout kills it.
+      stdio: ['ignore', 'pipe', 'pipe'],
       // Don't inherit full env — strip anything sensitive, add TeX restrictions.
       // Security-critical flags go AFTER the spread so callers cannot override them.
       env: {

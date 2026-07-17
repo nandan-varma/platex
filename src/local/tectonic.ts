@@ -29,6 +29,11 @@ function getBundledBinaryCandidates(): string[] {
 
 /** Resolve the tectonic binary path, setting it up in /tmp if necessary. */
 export async function resolveTectonicBinary(): Promise<string | null> {
+  // Warm-container fast path: TMP_BINARY only exists because an earlier cold
+  // call already established there was no system tectonic, so skip re-probing
+  // PATH (a `which` subprocess) on every warm invocation.
+  if (existsSync(TMP_BINARY)) return TMP_BINARY;
+
   // 1. System tectonic (dev machine or Docker image with tectonic installed)
   const systemBinary = (await isCommandAvailable('tectonic')) ? 'tectonic' : null;
   if (systemBinary) return systemBinary;
@@ -36,9 +41,6 @@ export async function resolveTectonicBinary(): Promise<string | null> {
   // 2. Bundled binary — copy to /tmp so we can ensure +x on Lambda/Vercel
   const bundled = getBundledBinaryCandidates().find((candidate) => existsSync(candidate));
   if (!bundled) return null;
-
-  // Re-use already-prepared binary on warm container
-  if (existsSync(TMP_BINARY)) return TMP_BINARY;
 
   // Fluid Compute reuses a warm instance across concurrent requests, so two
   // invocations can race here. Stage the copy at a per-process-unique path and

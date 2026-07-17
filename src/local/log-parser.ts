@@ -1,11 +1,25 @@
 import type { LatexError, LatexWarning, WarningCode } from '../types.js';
 
 /**
- * TeX wraps long lines at column 79 with no continuation marker.
- * Rejoin lines that are exactly 79 chars — the same heuristic used by latexmk.
+ * TeX wraps long lines at column 79 (`max_print_line`) with no continuation
+ * marker. Split the log into lines, rejoining segments of 79+ chars with the
+ * following non-blank segment — the same heuristic used by latexmk. Done as a
+ * single pass over the split segments rather than a `.{79}\n` regex over the
+ * whole log: the fixed-width regex re-attempts a 79-char match at every
+ * position, which is ~100× slower on multi-MB logs.
  */
-function unwrapLines(log: string): string {
-  return log.replace(/(.{79})\n(?!\n)/g, '$1');
+function splitUnwrappedLines(log: string): string[] {
+  const raw = log.split('\n');
+  const lines: string[] = [];
+  for (let i = 0; i < raw.length; i++) {
+    let line = raw[i] as string;
+    while ((raw[i] as string).length >= 79 && i + 1 < raw.length && raw[i + 1] !== '') {
+      i++;
+      line += raw[i] as string;
+    }
+    lines.push(line);
+  }
+  return lines;
 }
 
 /** Count occurrences of a single character without allocating (unlike `split`). */
@@ -36,7 +50,7 @@ export function parseLog(
 }
 
 function parseLatexLog(log: string): { errors: LatexError[]; warnings: LatexWarning[] } {
-  const lines = unwrapLines(log).split('\n');
+  const lines = splitUnwrappedLines(log);
 
   const errors: LatexError[] = [];
   const warnings: LatexWarning[] = [];
@@ -257,16 +271,23 @@ function parseBiberLog(log: string): { errors: LatexError[]; warnings: LatexWarn
   return { errors, warnings };
 }
 
+// Module-scoped so the patterns are compiled once, not on every call.
+const RERUN_PATTERNS = [
+  /Rerun to get cross-references right/,
+  /Rerun to get outlines right/,
+  /Label\(s\) may have changed\. Rerun/,
+  /Package natbib Warning:.*rerun/i,
+  /Package rerunfilecheck Warning:/i,
+  /Package longtable Warning:.*rerun/i,
+];
+
+// Every rerun pattern contains "rerun" case-insensitively — one cheap scan
+// rejects the common already-stable log before running all six patterns. Keep
+// new patterns covered by this pre-filter (or widen it).
+const RERUN_HINT = /rerun/i;
+
 /** Check if the log signals that another LaTeX pass is needed */
 export function needsRerun(log: string): boolean {
-  const RERUN_PATTERNS = [
-    /Rerun to get cross-references right/,
-    /Rerun to get outlines right/,
-    /Label\(s\) may have changed\. Rerun/,
-    /Package natbib Warning:.*rerun/i,
-    /Package rerunfilecheck Warning:/i,
-    /Package longtable Warning:.*rerun/i,
-  ];
-
+  if (!RERUN_HINT.test(log)) return false;
   return RERUN_PATTERNS.some((re) => re.test(log));
 }

@@ -308,6 +308,28 @@ describe('parseLog - line unwrapping', () => {
     expect(errors).toHaveLength(1);
     expect(errors[0]?.message).toBe(`${first}second part of the message`);
   });
+
+  it('chains rejoining across consecutive wrapped segments', () => {
+    // '! ' + 77 chars = exactly 79, then a full 79-char segment, then the tail.
+    const log = `! ${'y'.repeat(77)}\n${'x'.repeat(79)}\ntail\nl.5 foo`;
+    const { errors } = parseLog(log);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.message).toBe(`${'y'.repeat(77)}${'x'.repeat(79)}tail`);
+  });
+
+  it('does not rejoin a 79-char line followed by a blank line', () => {
+    const log = `! ${'y'.repeat(77)}\n\nl.5 foo`;
+    const { errors } = parseLog(log);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.message).toBe('y'.repeat(77));
+  });
+
+  it('does not rejoin a 79-char line that ends the log', () => {
+    const log = `! ${'y'.repeat(77)}`;
+    const { errors } = parseLog(log);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.message).toBe('y'.repeat(77));
+  });
 });
 
 describe('needsRerun - additional patterns', () => {
@@ -327,6 +349,11 @@ describe('needsRerun - additional patterns', () => {
 
   it('returns false for an empty log', () => {
     expect(needsRerun('')).toBe(false);
+  });
+
+  it('returns false when "rerun" appears without any recognized pattern', () => {
+    // Passes the cheap pre-filter but matches none of the full patterns.
+    expect(needsRerun('the user should rerun the build manually')).toBe(false);
   });
 });
 

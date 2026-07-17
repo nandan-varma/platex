@@ -386,28 +386,29 @@ async function collectFiles(
   inputPath: string | null,
   cwd: string,
 ): Promise<CollectedFiles> {
-  // First resolve the full attachment list via a cheap metadata walk, then
-  // read every file's bytes in parallel rather than one blocking read at a time.
-  const targets: Array<{ abs: string; key: string }> = [];
-  const add = (absPath: string, key: string): void => {
-    if (absPath !== inputPath) targets.push({ abs: absPath, key });
-  };
-
-  for (const filePath of filePaths) {
-    const abs = resolve(cwd, filePath);
-    const info = await stat(abs);
-    if (info.isDirectory()) {
-      for (const entry of await readdir(abs, { recursive: true, withFileTypes: true })) {
-        if (!entry.isFile()) continue;
-        const entryAbs = resolve(entry.parentPath, entry.name);
-        add(entryAbs, toPosix(relative(abs, entryAbs)));
+  // First resolve the full attachment list via a metadata walk — every --file
+  // argument stat'd/walked in parallel — then read every file's bytes in
+  // parallel rather than one blocking read at a time. Groups are flattened in
+  // argument order so the resulting key set is deterministic.
+  const targetGroups = await Promise.all(
+    filePaths.map(async (filePath): Promise<Array<{ abs: string; key: string }>> => {
+      const abs = resolve(cwd, filePath);
+      const info = await stat(abs);
+      if (info.isDirectory()) {
+        const entries = await readdir(abs, { recursive: true, withFileTypes: true });
+        return entries
+          .filter((entry) => entry.isFile())
+          .map((entry) => {
+            const entryAbs = resolve(entry.parentPath, entry.name);
+            return { abs: entryAbs, key: toPosix(relative(abs, entryAbs)) };
+          });
       }
-    } else {
       const rel = relative(inputDir, abs);
       const key = rel.startsWith('..') || isAbsolute(rel) ? basename(abs) : toPosix(rel);
-      add(abs, key);
-    }
-  }
+      return [{ abs, key }];
+    }),
+  );
+  const targets = targetGroups.flat().filter(({ abs }) => abs !== inputPath);
 
   const files: Record<string, Buffer> = {};
   const paths: string[] = [];

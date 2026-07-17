@@ -2,16 +2,27 @@ import { existsSync } from 'node:fs';
 import { chmod, mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { resolveTectonicBinary } from './tectonic.js';
+import { clearCommandAvailabilityCache } from './utils.js';
 
 const TMP_BINARY = '/tmp/platex-tectonic';
 
 describe('resolveTectonicBinary', () => {
   const originalPath = process.env.PATH;
 
+  beforeEach(async () => {
+    // The /tmp binary is a warm-container fast path that wins over the PATH
+    // probe — another test file (or a real run) may have staged it, so start
+    // each test cold.
+    await rm(TMP_BINARY, { force: true });
+  });
+
   afterEach(async () => {
     process.env.PATH = originalPath;
+    // Positive `which tectonic` results are memoized; each test rewrites PATH,
+    // so drop the cache alongside the /tmp binary to keep tests independent.
+    clearCommandAvailabilityCache();
     await rm(TMP_BINARY, { force: true });
   });
 

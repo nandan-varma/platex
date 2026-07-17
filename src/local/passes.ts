@@ -35,13 +35,34 @@ export async function runPasses(
   const allWarnings: LatexWarning[] = [];
   let passNumber = 0;
 
+  // Dedup key set for rerun passes — O(1) lookups instead of scanning
+  // allErrors per candidate (which is quadratic when a broken document
+  // repeats the same error hundreds of times).
+  const seenErrors = new Set<string>();
+  const errorKey = (err: LatexError) => `${err.line} ${err.message}`;
+  const pushErrors = (errs: LatexError[]) => {
+    for (const err of errs) {
+      seenErrors.add(errorKey(err));
+      allErrors.push(err);
+    }
+  };
+  const pushNewErrors = (errs: LatexError[]) => {
+    for (const err of errs) {
+      const key = errorKey(err);
+      if (!seenErrors.has(key)) {
+        seenErrors.add(key);
+        allErrors.push(err);
+      }
+    }
+  };
+
   // ── Pass 1 ──────────────────────────────────────────────────────────────────
   passNumber++;
   const log1 = await runEngine({ engine, tmpDir, passNumber, timeout: remainingTime(), signal });
   allLogs.push(log1);
 
   const parsed1 = parseLog(log1.log, 'latex');
-  allErrors.push(...parsed1.errors);
+  pushErrors(parsed1.errors);
   allWarnings.push(...parsed1.warnings);
 
   // Any non-zero exit (fatal error, crash, or timeout) — stop immediately,
@@ -65,7 +86,7 @@ export async function runPasses(
       allLogs.push(bibLog);
       /* v8 ignore next -- 'biber' arm needs a real biber binary (absent in CI); parseBiberLog is covered directly in log-parser.test.ts */
       const parsedBib = parseLog(bibLog.log, bibliography === 'biber' ? 'biber' : 'bibtex');
-      allErrors.push(...parsedBib.errors);
+      pushErrors(parsedBib.errors);
       allWarnings.push(...parsedBib.warnings);
     }
   }
@@ -85,11 +106,7 @@ export async function runPasses(
 
   const parsed2 = parseLog(log2.log, 'latex');
   // Don't re-add errors from pass 2 if they're identical to pass 1 (references resolving)
-  for (const err of parsed2.errors) {
-    if (!allErrors.some((e) => e.message === err.message && e.line === err.line)) {
-      allErrors.push(err);
-    }
-  }
+  pushNewErrors(parsed2.errors);
   allWarnings.push(...parsed2.warnings);
 
   if (log2.exitCode !== 0 || remainingTime() <= 0) {
@@ -108,11 +125,7 @@ export async function runPasses(
   allLogs.push(log3);
 
   const parsed3 = parseLog(log3.log, 'latex');
-  for (const err of parsed3.errors) {
-    if (!allErrors.some((e) => e.message === err.message && e.line === err.line)) {
-      allErrors.push(err);
-    }
-  }
+  pushNewErrors(parsed3.errors);
   allWarnings.push(...parsed3.warnings);
 
   return { errors: allErrors, warnings: allWarnings, logs: allLogs };
