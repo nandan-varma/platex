@@ -64,7 +64,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- Initial release: LaTeX → PDF compilation with Overleaf-matching output.
+- Initial release: LaTeX → PDF compilation with accurate output.
 - Local pipeline (system TeX Live pdflatex/xelatex/lualatex with multi-pass +
   bibtex/biber, or bundled Tectonic fallback) and remote mode via the platex
   HTTP service.

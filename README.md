@@ -4,7 +4,7 @@
 [![CI](https://github.com/nandan-varma/platex/actions/workflows/ci.yml/badge.svg)](https://github.com/nandan-varma/platex/actions/workflows/ci.yml)
 [![license](https://img.shields.io/npm/l/@nandan-varma/platex.svg)](LICENSE)
 
-Compile LaTeX to PDF in TypeScript, with output as close to Overleaf as possible. Works in any framework that speaks the Fetch API — Next.js, TanStack Start, Astro, SvelteKit, Remix, Bun, Deno, Cloudflare Workers — on Node.js or the edge.
+Compile LaTeX to PDF in TypeScript, with output as accurate as your local TeX toolchain. Works in any framework that speaks the Fetch API — Next.js, TanStack Start, Astro, SvelteKit, Remix, Bun, Deno, Cloudflare Workers — on Node.js or the edge.
 
 ## Quick start
 
@@ -115,7 +115,7 @@ export const POST = handleCompileRequest // or: createRequestHandler(createPlate
 - Handles multi-pass compilation and bibliography internally (no manual bibtex runs)
 - Caches packages in `/tmp` on Vercel, making warm-container reuse fast
 
-When system TeX Live is available (self-hosted Docker), the library uses pdflatex/xelatex/lualatex directly with full multi-pass control (same as Overleaf's CLSI).
+When system TeX Live is available (self-hosted Docker), the library uses pdflatex/xelatex/lualatex directly with full multi-pass control.
 
 ---
 
@@ -346,7 +346,7 @@ Nothing below is hardcoded — every default can be overridden per call, per cli
 | Option | Type | Default | Description |
 |---|---|---|---|
 | `engine` | `'pdflatex' \| 'xelatex' \| 'lualatex'` | `'pdflatex'` | TeX engine (used when system TeX is available; Tectonic is always XeTeX-based) |
-| `passes` | `'auto' \| 1 \| 2 \| 3` | `'auto'` | Compilation passes. `'auto'` reruns until stable (like Overleaf) |
+| `passes` | `'auto' \| 1 \| 2 \| 3` | `'auto'` | Compilation passes. `'auto'` reruns until output is stable |
 | `bibliography` | `'bibtex' \| 'biber' \| 'none'` | `'bibtex'` | Bibliography engine |
 | `files` | `Record<string, Buffer>` | `{}` | Additional files: `.bib`, images, included `.tex` files |
 | `serviceUrl` | `string` | `PLATEX_SERVICE_URL` env var | URL of the platex service. If unset (and no env var), compiles locally (Node entry only) |
@@ -432,7 +432,7 @@ interface LatexWarning {
 
 ## Self-hosted (Docker, maximum accuracy)
 
-If you're self-hosting (not on Vercel), the Docker image uses full TeX Live — same as Overleaf:
+If you're self-hosting (not on Vercel), the Docker image uses full TeX Live:
 
 ```bash
 # Build the service image
@@ -446,7 +446,7 @@ docker run -p 3001:3001 platex
 docker compose -f docker/docker-compose.yml up
 ```
 
-Then set `PLATEX_SERVICE_URL=http://localhost:3001` in your app. With full TeX Live, pdflatex/xelatex/lualatex all run natively with the exact same flags and multi-pass logic Overleaf uses.
+Then set `PLATEX_SERVICE_URL=http://localhost:3001` in your app. With full TeX Live, pdflatex/xelatex/lualatex all run natively with standard flags and multi-pass logic.
 
 ---
 
@@ -516,7 +516,7 @@ serve({ fetch: app.fetch, port: 3001 })
 
 ---
 
-## How output matches Overleaf
+## How output accuracy works
 
 When running with system TeX Live (Docker/self-hosted):
 - Same engine flags: `-interaction=nonstopmode -halt-on-error -file-line-error`
