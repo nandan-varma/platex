@@ -188,9 +188,10 @@ const result = await compile(source, {
 | `engine` | `'pdflatex' \| 'xelatex' \| 'lualatex'` | `'pdflatex'` | TeX engine (used when system TeX is available; Tectonic is always XeTeX-based) |
 | `passes` | `'auto' \| 1 \| 2 \| 3` | `'auto'` | Compilation passes. `'auto'` reruns until stable (like Overleaf) |
 | `bibliography` | `'bibtex' \| 'biber' \| 'none'` | `'bibtex'` | Bibliography engine |
-| `files` | `Record<string, Buffer>` | `{}` | Additional files: `.bib`, images, included `.tex` files |
+| `files` | `Record<string, Buffer>` | `{}` | Additional files: `.bib`, images, included `.tex` files. Max 50 files, 25MB combined |
 | `serviceUrl` | `string` | — | URL of the platex service. If unset, compiles locally |
-| `timeout` | `number` | `30000` | Timeout in milliseconds |
+| `timeout` | `number` | `30000` | Overall wall-clock budget in milliseconds for the *entire* compile pipeline (all LaTeX passes plus bibliography combined), not per-process |
+| `signal` | `AbortSignal` | — | Cancel an in-flight compile (kills local subprocesses, or aborts the remote HTTP request) |
 
 ### `CompileResult`
 
@@ -265,19 +266,29 @@ const result = await compile(source)
 | Method | Path | Description |
 |---|---|---|
 | `POST` | `/compile` | Compile LaTeX. Body: `CompileRequest` JSON. Response: `CompileResponse` JSON |
-| `GET` | `/health` | Health check. Returns `{ "status": "ok" }` |
+| `GET` | `/health` | Health check. Returns `{ "status": "ok" }` (never requires auth) |
 
 `CompileRequest` body shape:
 ```typescript
 {
-  source: string           // LaTeX source (main.tex content)
+  source: string           // LaTeX source (main.tex content), max 5MB
   engine: 'pdflatex' | 'xelatex' | 'lualatex'
   passes: 'auto' | 1 | 2 | 3
   bibliography: 'bibtex' | 'biber' | 'none'
-  files: Record<string, string>   // filename → base64-encoded content
-  timeout: number                 // milliseconds
+  files: Record<string, string>   // filename → base64-encoded content; max 50 files, 25MB combined decoded size
+  timeout: number                 // milliseconds, overall pipeline budget (see above), capped at 120s
 }
 ```
+
+### Server configuration (env vars)
+
+| Variable | Default | Description |
+|---|---|---|
+| `PORT` | `3001` | Port the standalone server listens on |
+| `PLATEX_API_KEY` | unset | If set, `POST /compile` requires `Authorization: Bearer <key>`. Unset by default — if you deploy the service somewhere publicly reachable, set this (or otherwise restrict access), since compiling is CPU-intensive and unauthenticated by default |
+| `PLATEX_MAX_CONCURRENT` | `4` | Max number of compiles the process runs at once; additional requests get `503` until a slot frees up |
+
+The server also rejects request bodies over ~45MB outright (`413`), independent of the `files` validation above.
 
 ---
 

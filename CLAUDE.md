@@ -63,4 +63,8 @@ src/
 - Path traversal in filenames is rejected (both in HTTP route and library)
 - Child processes run with minimal env (PATH, HOME, TMPDIR only)
 - TeX write/open restrictions enforced via `openout_any=p`, `openin_any=a`
-- Source limited to 5MB, timeout capped at 120s
+- Source limited to 5MB (`MAX_SOURCE_BYTES` in `src/defaults.ts`); `files` limited to 50 entries / 25MB combined decoded size (`MAX_FILES_COUNT`, `MAX_TOTAL_FILES_BYTES`), enforced in both the HTTP route and `runLocalPipeline` itself (so direct library callers can't bypass it)
+- `timeout` is enforced as an overall wall-clock budget for the *whole* pipeline (`src/local/passes.ts` tracks a deadline and gives each subprocess only the remaining time), capped at 120s by the HTTP schema — not a per-process allowance, so total server-side time per request is actually bounded by the documented cap
+- The HTTP server has no auth by default (`PLATEX_API_KEY` env var opts into bearer-token auth on `/compile`) and caps concurrent compiles per instance (`PLATEX_MAX_CONCURRENT`, default 4) plus overall request body size (~45MB) — see README's "Server configuration" section
+- `CompileOptions.signal` (`AbortSignal`) cancels in-flight local subprocesses or the remote HTTP request; the server also wires the incoming request's own abort signal through so a disconnected client doesn't leave orphaned compiles running
+- `scripts/download-tectonic.mjs` verifies the downloaded Tectonic tarball against a pinned SHA256 per platform before extracting/executing it

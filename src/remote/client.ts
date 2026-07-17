@@ -32,6 +32,10 @@ export async function callRemote(source: string, options: CompileOptions): Promi
   const controller = new AbortController();
   // Give slightly more time than the compilation timeout for network overhead
   const networkTimeout = setTimeout(() => controller.abort(), timeout + 10_000);
+  // Let a caller-supplied signal cancel the request early too.
+  const onCallerAbort = () => controller.abort();
+  if (options.signal?.aborted) controller.abort();
+  options.signal?.addEventListener('abort', onCallerAbort);
 
   let response: Response;
   try {
@@ -42,10 +46,10 @@ export async function callRemote(source: string, options: CompileOptions): Promi
       signal: controller.signal,
     });
   } catch {
-    clearTimeout(networkTimeout);
     throw new Error('platex: failed to reach service');
   } finally {
     clearTimeout(networkTimeout);
+    options.signal?.removeEventListener('abort', onCallerAbort);
   }
 
   if (!response.ok) {

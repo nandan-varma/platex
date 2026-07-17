@@ -1,9 +1,10 @@
 import { existsSync } from 'node:fs';
-import { access, chmod, constants, copyFile, readFile } from 'node:fs/promises';
+import { chmod, copyFile, readFile, rename, rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { RawPassLog } from '../types.js';
 import { spawnProcess } from './compiler.js';
+import { isCommandAvailable } from './utils.js';
 
 /** Where the Tectonic binary lives at runtime in a Vercel/Lambda function. */
 const TMP_BINARY = '/tmp/platex-tectonic';
@@ -28,7 +29,7 @@ function getBundledBinaryCandidates(): string[] {
 /** Resolve the tectonic binary path, setting it up in /tmp if necessary. */
 export async function resolveTectonicBinary(): Promise<string | null> {
   // 1. System tectonic (dev machine or Docker image with tectonic installed)
-  const systemBinary = (await isExecutable('tectonic')) ? 'tectonic' : null;
+  const systemBinary = (await isCommandAvailable('tectonic')) ? 'tectonic' : null;
   if (systemBinary) return systemBinary;
 
   // 2. Bundled binary — copy to /tmp so we can ensure +x on Lambda/Vercel
@@ -38,23 +39,20 @@ export async function resolveTectonicBinary(): Promise<string | null> {
   // Re-use already-prepared binary on warm container
   if (existsSync(TMP_BINARY)) return TMP_BINARY;
 
+  // Fluid Compute reuses a warm instance across concurrent requests, so two
+  // invocations can race here. Stage the copy at a per-process-unique path and
+  // `rename` it into place — rename is atomic on the same filesystem, so
+  // concurrent callers never observe (or execute) a partially-written binary.
+  const stagingPath = `${TMP_BINARY}.${process.pid}.${Date.now()}.tmp`;
   try {
-    await copyFile(bundled, TMP_BINARY);
-    await chmod(TMP_BINARY, 0o755);
+    await copyFile(bundled, stagingPath);
+    await chmod(stagingPath, 0o755);
+    await rename(stagingPath, TMP_BINARY);
     return TMP_BINARY;
   } catch {
-    return null;
-  }
-}
-
-async function isExecutable(cmd: string): Promise<boolean> {
-  try {
-    await access(cmd, constants.X_OK);
-    return true;
-  } catch {
-    // If it's just a name (not a path), try finding it via PATH
-    const { exitCode } = await spawnProcess('which', [cmd], process.cwd(), 5_000);
-    return exitCode === 0;
+    await rm(stagingPath, { force: true });
+    // Another concurrent call may have finished the rename first.
+    return existsSync(TMP_BINARY) ? TMP_BINARY : null;
   }
 }
 
@@ -66,8 +64,9 @@ export async function runTectonic(opts: {
   binary: string;
   tmpDir: string;
   timeout: number;
+  signal?: AbortSignal | undefined;
 }): Promise<RawPassLog> {
-  const { binary, tmpDir, timeout } = opts;
+  const { binary, tmpDir, timeout, signal } = opts;
 
   const args = [
     '-X',
@@ -79,10 +78,17 @@ export async function runTectonic(opts: {
     'main.tex',
   ];
 
-  const { stdout, stderr, exitCode } = await spawnProcess(binary, args, tmpDir, timeout, {
-    // Direct Tectonic's package cache to /tmp (only writable dir on Vercel/Lambda)
-    XDG_CACHE_HOME: '/tmp/.tectonic-cache',
-  });
+  const { stdout, stderr, exitCode, timedOut } = await spawnProcess(
+    binary,
+    args,
+    tmpDir,
+    timeout,
+    {
+      // Direct Tectonic's package cache to /tmp (only writable dir on Vercel/Lambda)
+      XDG_CACHE_HOME: '/tmp/.tectonic-cache',
+    },
+    signal,
+  );
 
   let logContent = '';
   try {
@@ -98,5 +104,6 @@ export async function runTectonic(opts: {
     stderr,
     log: logContent,
     exitCode,
+    timedOut,
   };
 }

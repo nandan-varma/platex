@@ -7,6 +7,11 @@ services:
       - "3001:3001"
     environment:
       PORT: "3001"
+      # Uncomment to require `Authorization: Bearer <key>` on POST /compile —
+      # recommended if this service is reachable outside a trusted network.
+      # PLATEX_API_KEY: "change-me"
+      # Max simultaneous compiles; tune alongside the cpus/memory limits below.
+      # PLATEX_MAX_CONCURRENT: "4"
     restart: unless-stopped
     deploy:
       resources:

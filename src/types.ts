@@ -38,6 +38,8 @@ export interface RawPassLog {
   stderr: string;
   log: string;
   exitCode: number;
+  /** True if this pass was killed because it exceeded its time budget. */
+  timedOut: boolean;
 }
 
 export interface CompileOptions {
@@ -49,6 +51,8 @@ export interface CompileOptions {
   /** If set, compile via the remote platex HTTP service instead of local TeX */
   serviceUrl?: string;
   timeout?: number;
+  /** Abort the compile early (aborts in-flight processes / the remote request). */
+  signal?: AbortSignal | undefined;
 }
 
 export interface CompileResult {

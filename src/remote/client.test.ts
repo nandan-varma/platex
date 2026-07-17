@@ -93,7 +93,17 @@ describe('callRemote', () => {
         },
       ],
       warnings: [{ type: 'warning', code: 'other', file: null, line: null, message: 'careful' }],
-      logs: [{ passNumber: 1, engine: 'pdflatex', stdout: '', stderr: '', log: '', exitCode: 1 }],
+      logs: [
+        {
+          passNumber: 1,
+          engine: 'pdflatex',
+          stdout: '',
+          stderr: '',
+          log: '',
+          exitCode: 1,
+          timedOut: false,
+        },
+      ],
     };
     vi.stubGlobal(
       'fetch',
@@ -130,6 +140,28 @@ describe('callRemote', () => {
     await expect(callRemote('src', { serviceUrl: 'http://localhost:3001' })).rejects.toThrow(
       /platex: failed to reach service/,
     );
+  });
+
+  it('aborts the request when the caller-supplied AbortSignal fires', async () => {
+    const controller = new AbortController();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((_url: string, init: RequestInit) => {
+        return new Promise((_resolve, reject) => {
+          init.signal?.addEventListener('abort', () => {
+            reject(new DOMException('The operation was aborted.', 'AbortError'));
+          });
+        });
+      }),
+    );
+
+    const promise = callRemote('src', {
+      serviceUrl: 'http://localhost:3001',
+      signal: controller.signal,
+    });
+    controller.abort();
+
+    await expect(promise).rejects.toThrow(/platex: failed to reach service/);
   });
 
   it('aborts the request once the timeout (plus network buffer) elapses', async () => {

@@ -1,7 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
+import { MAX_FILES_COUNT } from '../defaults.js';
 import type { CompileResponse } from '../types.js';
 import { createApp } from './app.js';
 
@@ -153,4 +154,124 @@ describe('POST /compile - real compilation', () => {
     },
     TIMEOUT,
   );
+});
+
+describe('POST /compile - files limits', () => {
+  it('rejects more than MAX_FILES_COUNT files', async () => {
+    const app = createApp();
+    const files: Record<string, string> = {};
+    for (let i = 0; i < MAX_FILES_COUNT + 1; i++) {
+      files[`f${i}.txt`] = Buffer.from('x').toString('base64');
+    }
+    const res = await postCompile(app, { source: 'x', files });
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects when the combined decoded size of all files exceeds the total budget', async () => {
+    const app = createApp();
+    // Two 13MB files (each under the 20MB per-file cap) combine to 26MB,
+    // over the 25MB total budget.
+    const bigFile = Buffer.alloc(13_000_000).toString('base64');
+    const res = await postCompile(app, {
+      source: 'x',
+      files: { 'a.bin': bigFile, 'b.bin': bigFile },
+    });
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('POST /compile - request body limit', () => {
+  it('rejects a raw request body larger than the configured limit with 413', async () => {
+    const app = createApp();
+    const oversized = JSON.stringify({ source: 'x'.repeat(46_000_000) });
+    const res = await app.request('/compile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: oversized,
+    });
+    expect(res.status).toBe(413);
+  }, 20_000);
+});
+
+describe('POST /compile - concurrency limit', () => {
+  afterEach(() => {
+    delete process.env.PLATEX_MAX_CONCURRENT;
+  });
+
+  it('rejects with 503 once the concurrency limit is exhausted', async () => {
+    process.env.PLATEX_MAX_CONCURRENT = '0';
+    const app = createApp();
+    const source = await readFixture('minimal.tex');
+    const res = await postCompile(app, { source });
+    expect(res.status).toBe(503);
+  });
+});
+
+describe('POST /compile - client disconnect cancellation', () => {
+  it('stops compiling immediately when the request signal is already aborted', async () => {
+    const app = createApp();
+    const source = await readFixture('minimal.tex');
+    const controller = new AbortController();
+    controller.abort();
+
+    const started = Date.now();
+    const res = await app.fetch(
+      new Request('http://localhost/compile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source }),
+        signal: controller.signal,
+      }),
+    );
+    const elapsed = Date.now() - started;
+
+    // A real compile of minimal.tex takes ~100-300ms; an aborted one should
+    // never even spawn the engine, so this should resolve near-instantly.
+    expect(elapsed).toBeLessThan(2_000);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as CompileResponse;
+    expect(body.pdf).toBeNull();
+  });
+});
+
+describe('bearer auth (PLATEX_API_KEY)', () => {
+  afterEach(() => {
+    delete process.env.PLATEX_API_KEY;
+  });
+
+  it('rejects requests without a matching Authorization header when PLATEX_API_KEY is set', async () => {
+    process.env.PLATEX_API_KEY = 'super-secret';
+    const app = createApp();
+    const res = await postCompile(app, { source: 'x' });
+    expect(res.status).toBe(401);
+  });
+
+  it('accepts requests with a matching bearer token', async () => {
+    process.env.PLATEX_API_KEY = 'super-secret';
+    const app = createApp();
+    // Use an otherwise-invalid body so a passing request proves auth
+    // succeeded (reaching schema validation) without a real compile.
+    const res = await app.request('/compile', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer super-secret',
+      },
+      body: JSON.stringify({ source: '' }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it('does not require auth for /health even when PLATEX_API_KEY is set', async () => {
+    process.env.PLATEX_API_KEY = 'super-secret';
+    const app = createApp();
+    const res = await app.request('/health');
+    expect(res.status).toBe(200);
+  });
+
+  it('allows unauthenticated requests when PLATEX_API_KEY is unset', async () => {
+    const app = createApp();
+    const res = await postCompile(app, { source: '' });
+    expect(res.status).toBe(400);
+  });
 });

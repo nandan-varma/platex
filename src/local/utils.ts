@@ -12,14 +12,23 @@ export function isFilenameValid(filename: string): boolean {
   return SAFE_FILENAME.test(filename) && !filename.includes('..') && !filename.startsWith('/');
 }
 
-export async function isEngineAvailable(engine: string): Promise<boolean> {
+/**
+ * Check whether `cmd` is directly executable (a path) or resolvable on PATH
+ * (a bare name). Shared by engine detection (utils) and Tectonic detection
+ * (tectonic.ts) so the lookup logic — including the Windows `where` vs POSIX
+ * `which` split — lives in exactly one place.
+ */
+export async function isCommandAvailable(cmd: string): Promise<boolean> {
   try {
-    await access(engine, constants.X_OK);
+    await access(cmd, constants.X_OK);
     return true;
   } catch {
-    // engine is a name, not a path — check via which
+    // cmd is a name, not a path — resolve it via the platform's PATH lookup tool.
     const { spawnProcess } = await import('./compiler.js');
-    const { exitCode } = await spawnProcess('which', [engine], process.cwd(), 5_000);
+    const lookupTool = process.platform === 'win32' ? 'where' : 'which';
+    const { exitCode } = await spawnProcess(lookupTool, [cmd], process.cwd(), 5_000);
     return exitCode === 0;
   }
 }
+
+export const isEngineAvailable = isCommandAvailable;
