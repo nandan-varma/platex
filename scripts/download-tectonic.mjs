@@ -51,10 +51,15 @@ const tarPath = join(BIN_DIR, filename);
 
 async function download(url, dest) {
   return new Promise((resolve, reject) => {
-    function follow(url) {
+    const MAX_REDIRECTS = 5;
+    function follow(url, redirectCount = 0) {
+      if (redirectCount > MAX_REDIRECTS) {
+        reject(new Error(`Too many redirects (${MAX_REDIRECTS}) for ${url}`));
+        return;
+      }
       get(url, (res) => {
         if (res.statusCode === 301 || res.statusCode === 302) {
-          follow(res.headers.location);
+          follow(res.headers.location, redirectCount + 1);
           return;
         }
         if (res.statusCode !== 200) {

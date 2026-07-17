@@ -1,12 +1,20 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, rm, writeFile, readFile } from 'node:fs/promises';
-import { join, dirname } from 'node:path';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { spawnProcess, runEngine } from './compiler.js';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { runEngine, spawnProcess } from './compiler.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const FAKE_LATEX = join(__dirname, '..', '..', 'test', 'fixtures', 'fake-engines', 'fake-latex.mjs');
+const FAKE_LATEX = join(
+  __dirname,
+  '..',
+  '..',
+  'test',
+  'fixtures',
+  'fake-engines',
+  'fake-latex.mjs',
+);
 
 describe('spawnProcess', () => {
   it('captures stdout and stderr from a real child process', async () => {
@@ -22,20 +30,35 @@ describe('spawnProcess', () => {
   });
 
   it('reports a non-zero exit code from the child process', async () => {
-    const result = await spawnProcess(process.execPath, ['-e', 'process.exit(3)'], process.cwd(), 5_000);
+    const result = await spawnProcess(
+      process.execPath,
+      ['-e', 'process.exit(3)'],
+      process.cwd(),
+      5_000,
+    );
     expect(result.exitCode).toBe(3);
   });
 
   it('kills the process and resolves once the timeout elapses', async () => {
     const started = Date.now();
-    const result = await spawnProcess(process.execPath, ['-e', 'setTimeout(() => {}, 10_000)'], process.cwd(), 300);
+    const result = await spawnProcess(
+      process.execPath,
+      ['-e', 'setTimeout(() => {}, 10_000)'],
+      process.cwd(),
+      300,
+    );
     const elapsed = Date.now() - started;
     expect(elapsed).toBeLessThan(5_000);
     expect(result.exitCode).not.toBe(0);
   });
 
   it('resolves with exit code 127 when the binary does not exist', async () => {
-    const result = await spawnProcess('platex-definitely-not-a-real-binary', [], process.cwd(), 5_000);
+    const result = await spawnProcess(
+      'platex-definitely-not-a-real-binary',
+      [],
+      process.cwd(),
+      5_000,
+    );
     expect(result.exitCode).toBe(127);
     expect(result.stderr.length).toBeGreaterThan(0);
   });
@@ -101,7 +124,7 @@ describe('runEngine', () => {
     const echoScript = join(tmpDir, 'echo-args.mjs');
     await writeFile(
       echoScript,
-      "#!/usr/bin/env node\nconsole.log(JSON.stringify(process.argv.slice(2)));\n",
+      '#!/usr/bin/env node\nconsole.log(JSON.stringify(process.argv.slice(2)));\n',
       'utf-8',
     );
     const { chmod } = await import('node:fs/promises');

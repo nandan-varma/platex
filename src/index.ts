@@ -1,6 +1,6 @@
-import type { CompileOptions, CompileResult } from './types.js';
-import { callRemote } from './remote/client.js';
 import { runLocalPipeline } from './local/index.js';
+import { callRemote } from './remote/client.js';
+import type { CompileOptions, CompileResult } from './types.js';
 
 export async function compile(
   source: string,
@@ -18,13 +18,13 @@ export async function compile(
 }
 
 export type {
+  BibEngine,
   CompileOptions,
   CompileResult,
+  Engine,
   LatexError,
   LatexWarning,
-  WarningCode,
-  Engine,
-  BibEngine,
   PassCount,
   RawPassLog,
+  WarningCode,
 } from './types.js';

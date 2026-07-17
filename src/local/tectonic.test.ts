@@ -1,17 +1,17 @@
-import { describe, it, expect, afterEach } from 'vitest';
-import { mkdtemp, rm, writeFile, chmod, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { chmod, mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
 import { resolveTectonicBinary } from './tectonic.js';
 
 const TMP_BINARY = '/tmp/platex-tectonic';
 
 describe('resolveTectonicBinary', () => {
-  const originalPath = process.env['PATH'];
+  const originalPath = process.env.PATH;
 
   afterEach(async () => {
-    process.env['PATH'] = originalPath;
+    process.env.PATH = originalPath;
     await rm(TMP_BINARY, { force: true });
   });
 
@@ -22,7 +22,7 @@ describe('resolveTectonicBinary', () => {
     await chmod(fakeTectonicPath, 0o755);
 
     try {
-      process.env['PATH'] = `${binDir}:${originalPath}`;
+      process.env.PATH = `${binDir}:${originalPath}`;
       const resolved = await resolveTectonicBinary();
       expect(resolved).toBe('tectonic');
     } finally {
@@ -32,7 +32,7 @@ describe('resolveTectonicBinary', () => {
 
   it('falls back to the bundled binary, copying it to /tmp and marking it executable', async () => {
     // Ensure no system tectonic shadows the bundled one for this test.
-    process.env['PATH'] = '/usr/bin:/bin';
+    process.env.PATH = '/usr/bin:/bin';
     await rm(TMP_BINARY, { force: true });
 
     const resolved = await resolveTectonicBinary();
@@ -44,7 +44,7 @@ describe('resolveTectonicBinary', () => {
   });
 
   it('reuses the already-prepared /tmp binary on a warm call without erroring', async () => {
-    process.env['PATH'] = '/usr/bin:/bin';
+    process.env.PATH = '/usr/bin:/bin';
     await rm(TMP_BINARY, { force: true });
 
     const first = await resolveTectonicBinary();

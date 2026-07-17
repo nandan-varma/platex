@@ -1,6 +1,6 @@
-import { access, constants, copyFile, chmod, readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { access, chmod, constants, copyFile, readFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { RawPassLog } from '../types.js';
 import { spawnProcess } from './compiler.js';
@@ -28,7 +28,7 @@ function getBundledBinaryCandidates(): string[] {
 /** Resolve the tectonic binary path, setting it up in /tmp if necessary. */
 export async function resolveTectonicBinary(): Promise<string | null> {
   // 1. System tectonic (dev machine or Docker image with tectonic installed)
-  const systemBinary = await isExecutable('tectonic') ? 'tectonic' : null;
+  const systemBinary = (await isExecutable('tectonic')) ? 'tectonic' : null;
   if (systemBinary) return systemBinary;
 
   // 2. Bundled binary — copy to /tmp so we can ensure +x on Lambda/Vercel
@@ -70,22 +70,19 @@ export async function runTectonic(opts: {
   const { binary, tmpDir, timeout } = opts;
 
   const args = [
-    '-X', 'compile',
-    '--outdir', tmpDir,
+    '-X',
+    'compile',
+    '--outdir',
+    tmpDir,
     '--keep-logs',
     '--keep-intermediates',
     'main.tex',
   ];
 
-  const env: NodeJS.ProcessEnv = {
-    PATH: process.env['PATH'],
-    HOME: process.env['HOME'],
+  const { stdout, stderr, exitCode } = await spawnProcess(binary, args, tmpDir, timeout, {
     // Direct Tectonic's package cache to /tmp (only writable dir on Vercel/Lambda)
     XDG_CACHE_HOME: '/tmp/.tectonic-cache',
-    openout_any: 'p',
-  };
-
-  const { stdout, stderr, exitCode } = await spawnProcess(binary, args, tmpDir, timeout);
+  });
 
   let logContent = '';
   try {
@@ -96,7 +93,7 @@ export async function runTectonic(opts: {
 
   return {
     passNumber: 1,
-    engine: 'pdflatex', // Tectonic uses XeTeX internally but produces equivalent output
+    engine: 'tectonic',
     stdout,
     stderr,
     log: logContent,

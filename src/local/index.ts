@@ -1,15 +1,13 @@
-import { mkdtemp, rm, writeFile, readFile, mkdir, access, constants } from 'node:fs/promises';
-import { join, dirname } from 'node:path';
+import { access, constants, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { DEFAULT_BIB, DEFAULT_ENGINE, DEFAULT_PASSES, DEFAULT_TIMEOUT } from '../defaults.js';
 import type { CompileOptions, CompileResult } from '../types.js';
+import { parseLog } from './log-parser.js';
 import { runPasses } from './passes.js';
 import { resolveTectonicBinary, runTectonic } from './tectonic.js';
-import { parseLog } from './log-parser.js';
 
-const DEFAULT_ENGINE = 'pdflatex' as const;
-const DEFAULT_PASSES = 'auto' as const;
-const DEFAULT_BIB = 'bibtex' as const;
-const DEFAULT_TIMEOUT = 30_000;
+const SAFE_FILENAME = /^[a-zA-Z0-9._-][a-zA-Z0-9._/-]*$/;
 
 async function isEngineAvailable(engine: string): Promise<boolean> {
   try {
@@ -41,8 +39,10 @@ export async function runLocalPipeline(
 
     // Write additional files, creating subdirectories as needed
     for (const [filename, content] of Object.entries(files)) {
-      const safe = filename.replace(/\.\./g, '_').replace(/^\//, '');
-      const dest = join(tmpDir, safe);
+      if (!SAFE_FILENAME.test(filename) || filename.includes('..') || filename.startsWith('/')) {
+        throw new TypeError(`platex: invalid filename "${filename}"`);
+      }
+      const dest = join(tmpDir, filename);
       const dir = dirname(dest);
       if (dir !== tmpDir) {
         await mkdir(dir, { recursive: true });
@@ -71,7 +71,7 @@ export async function runLocalPipeline(
     if (!tectonicBinary) {
       throw new Error(
         `Engine '${engine}' is not installed and the bundled Tectonic binary was not found. ` +
-        `Install TeX Live or run 'node scripts/download-tectonic.mjs' to set up Tectonic.`,
+          `Install TeX Live or run 'node scripts/download-tectonic.mjs' to set up Tectonic.`,
       );
     }
 

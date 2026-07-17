@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { parseLog, needsRerun, needsBibliography } from './log-parser.js';
+import { describe, expect, it } from 'vitest';
+import { needsRerun, parseLog } from './log-parser.js';
 
 const NESTED_FILE_ERROR_LOG = `
 This is pdfTeX, Version 3.141592653-2.6-1.40.24 (TeX Live 2022)
@@ -171,22 +171,6 @@ describe('needsRerun', () => {
   });
 });
 
-describe('needsBibliography', () => {
-  it('returns true when aux has \\citation and \\bibdata', () => {
-    const aux = '\\citation{smith2023}\n\\bibdata{refs}\n';
-    expect(needsBibliography(aux)).toBe(true);
-  });
-
-  it('returns false when aux has only \\citation', () => {
-    const aux = '\\citation{smith2023}\n';
-    expect(needsBibliography(aux)).toBe(false);
-  });
-
-  it('returns false for empty aux', () => {
-    expect(needsBibliography('')).toBe(false);
-  });
-});
-
 describe('parseLog - bibtex', () => {
   const BIBTEX_LOG = `
 This is BibTeX, Version 0.99d
@@ -316,26 +300,16 @@ describe('needsRerun - additional patterns', () => {
   });
 
   it('detects rerunfilecheck warning', () => {
-    expect(needsRerun('Package rerunfilecheck Warning: File `main.out\' has changed.')).toBe(true);
+    expect(needsRerun("Package rerunfilecheck Warning: File `main.out' has changed.")).toBe(true);
   });
 
   it('detects longtable rerun warning', () => {
-    expect(needsRerun('Package longtable Warning: Table widths have changed. Rerun LaTeX.')).toBe(true);
+    expect(needsRerun('Package longtable Warning: Table widths have changed. Rerun LaTeX.')).toBe(
+      true,
+    );
   });
 
   it('returns false for an empty log', () => {
     expect(needsRerun('')).toBe(false);
-  });
-});
-
-describe('needsBibliography - additional cases', () => {
-  it('returns false when aux has only \\bibdata', () => {
-    const aux = '\\bibdata{refs}\n';
-    expect(needsBibliography(aux)).toBe(false);
-  });
-
-  it('returns true regardless of key ordering in the aux file', () => {
-    const aux = '\\bibdata{refs}\n\\citation{smith2023}\n';
-    expect(needsBibliography(aux)).toBe(true);
   });
 });

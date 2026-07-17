@@ -1,15 +1,8 @@
-import type { CompileOptions, CompileResult, CompileRequest, CompileResponse } from '../types.js';
+import { DEFAULT_BIB, DEFAULT_ENGINE, DEFAULT_PASSES, DEFAULT_TIMEOUT } from '../defaults.js';
+import type { CompileOptions, CompileRequest, CompileResponse, CompileResult } from '../types.js';
 
-const DEFAULT_ENGINE = 'pdflatex' as const;
-const DEFAULT_PASSES = 'auto' as const;
-const DEFAULT_BIB = 'bibtex' as const;
-const DEFAULT_TIMEOUT = 30_000;
-
-export async function callRemote(
-  source: string,
-  options: CompileOptions,
-): Promise<CompileResult> {
-  const serviceUrl = options.serviceUrl!;
+export async function callRemote(source: string, options: CompileOptions): Promise<CompileResult> {
+  const serviceUrl = options.serviceUrl as string;
   const timeout = options.timeout ?? DEFAULT_TIMEOUT;
 
   const body: CompileRequest = {
@@ -19,10 +12,7 @@ export async function callRemote(
     bibliography: options.bibliography ?? DEFAULT_BIB,
     timeout,
     files: Object.fromEntries(
-      Object.entries(options.files ?? {}).map(([name, buf]) => [
-        name,
-        buf.toString('base64'),
-      ]),
+      Object.entries(options.files ?? {}).map(([name, buf]) => [name, buf.toString('base64')]),
     ),
   };
 
@@ -51,7 +41,7 @@ export async function callRemote(
     throw new Error(`platex: service returned ${response.status}: ${text}`);
   }
 
-  const data: CompileResponse = await response.json() as CompileResponse;
+  const data: CompileResponse = (await response.json()) as CompileResponse;
 
   return {
     pdf: data.pdf ? Buffer.from(data.pdf, 'base64') : null,

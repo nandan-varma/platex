@@ -1,4 +1,4 @@
-export type Engine = 'pdflatex' | 'xelatex' | 'lualatex';
+export type Engine = 'pdflatex' | 'xelatex' | 'lualatex' | 'tectonic';
 export type BibEngine = 'bibtex' | 'biber' | 'none';
 export type PassCount = 'auto' | 1 | 2 | 3;
 

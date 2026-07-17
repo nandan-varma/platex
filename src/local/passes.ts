@@ -1,7 +1,13 @@
-import type { CompileOptions, CompileResult, LatexError, LatexWarning, RawPassLog } from '../types.js';
+import type {
+  CompileOptions,
+  CompileResult,
+  LatexError,
+  LatexWarning,
+  RawPassLog,
+} from '../types.js';
+import { detectBibliography, runBibliography } from './bibtex.js';
 import { runEngine } from './compiler.js';
-import { runBibliography, detectBibliography } from './bibtex.js';
-import { parseLog, needsRerun } from './log-parser.js';
+import { needsRerun, parseLog } from './log-parser.js';
 
 /**
  * Run the full LaTeX compilation pipeline for a document already written to tmpDir.
@@ -46,7 +52,10 @@ export async function runPasses(
   }
 
   // ── Pass 2 ──────────────────────────────────────────────────────────────────
-  const needsPass2 = bibNeeded || (passes === 'auto' && needsRerun(log1.log)) || (typeof passes === 'number' && passes >= 2);
+  const needsPass2 =
+    bibNeeded ||
+    (passes === 'auto' && needsRerun(log1.log)) ||
+    (typeof passes === 'number' && passes >= 2);
   if (!needsPass2) {
     return { errors: allErrors, warnings: allWarnings, logs: allLogs };
   }
@@ -65,7 +74,8 @@ export async function runPasses(
   allWarnings.push(...parsed2.warnings);
 
   // ── Pass 3 ──────────────────────────────────────────────────────────────────
-  const needsPass3 = (passes === 'auto' && needsRerun(log2.log)) || (typeof passes === 'number' && passes >= 3);
+  const needsPass3 =
+    (passes === 'auto' && needsRerun(log2.log)) || (typeof passes === 'number' && passes >= 3);
   if (!needsPass3) {
     return { errors: allErrors, warnings: allWarnings, logs: allLogs };
   }
