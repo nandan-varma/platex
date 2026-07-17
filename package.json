@@ -2,6 +2,27 @@
   "name": "platex",
   "version": "0.1.0",
   "description": "Compile LaTeX to PDF binary matching Overleaf output, with Next.js support",
+  "license": "MIT",
+  "author": "Nandan Varma",
+  "homepage": "https://github.com/nandan-varma/platex#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nandan-varma/platex.git"
+  },
+  "bugs": {
+    "url": "https://github.com/nandan-varma/platex/issues"
+  },
+  "keywords": [
+    "latex",
+    "tex",
+    "pdf",
+    "overleaf",
+    "pdflatex",
+    "tectonic",
+    "nextjs",
+    "vercel",
+    "compile"
+  ],
   "type": "module",
   "exports": {
     ".": {
@@ -21,9 +42,11 @@
     "build:server": "tsup --config tsup.server.config.ts",
     "build:vercel": "node scripts/download-tectonic.mjs && tsup --config tsup.server.config.ts",
     "dev": "tsx src/server/index.ts",
+    "demo": "npm run build && npm --prefix examples/nextjs-demo install && npm --prefix examples/nextjs-demo run dev",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run typecheck && npm test && npm run build"
   },
   "dependencies": {
     "@hono/node-server": "^1.13.8",

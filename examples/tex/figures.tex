@@ -1,0 +1,27 @@
+\documentclass{article}
+\usepackage{graphicx}
+\usepackage{caption}
+
+\title{Figures}
+\author{platex demo}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{Including an image}
+platex writes any files passed via the \texttt{files} option into the
+compilation sandbox before running the engine, so images, fonts, and other
+assets resolve exactly as they would locally.
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=3cm]{demo-figure.png}
+  \caption{A supplied image asset, referenced by \texttt{demo-figure.png}.}
+  \label{fig:demo}
+\end{figure}
+
+Figure~\ref{fig:demo} was compiled from a raw PNG buffer supplied through
+\texttt{CompileOptions.files}.
+
+\end{document}

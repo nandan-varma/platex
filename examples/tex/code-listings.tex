@@ -1,0 +1,46 @@
+\documentclass{article}
+\usepackage{listings}
+\usepackage{xcolor}
+
+\lstset{
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{blue},
+  commentstyle=\color{gray},
+  showstringspaces=false,
+  frame=single,
+  breaklines=true,
+}
+
+\title{Code Listings}
+\author{platex demo}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{Inline code}
+Calling \texttt{compile(source, options)} routes to either the local
+pipeline or a remote service depending on whether \texttt{serviceUrl} is set.
+
+\section{A TypeScript listing}
+\begin{lstlisting}
+import { compile } from 'platex';
+
+const result = await compile(source, {
+  engine: 'pdflatex',
+  bibliography: 'bibtex',
+});
+
+if (result.pdf) {
+  console.log(`Compiled ${result.pdf.length} bytes`);
+}
+\end{lstlisting}
+
+\section{Verbatim text}
+\begin{verbatim}
+$ npm run build:vercel
+Downloading Tectonic 0.15.0 for linux-x64...
+Tectonic installed at bin/tectonic
+\end{verbatim}
+
+\end{document}

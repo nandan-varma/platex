@@ -1,0 +1,44 @@
+\documentclass{article}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{array}
+
+\title{Tables}
+\author{platex demo}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{Simple table}
+\begin{tabular}{l l r}
+  \toprule
+  Engine & Type & Speed \\
+  \midrule
+  pdflatex & Native TeX Live & Fast \\
+  xelatex & Native TeX Live & Medium \\
+  tectonic & Bundled fallback & Medium \\
+  \bottomrule
+\end{tabular}
+
+\section{Table with a caption and multirow cells}
+\begin{table}[h]
+  \centering
+  \begin{tabular}{|c|l|l|}
+    \hline
+    \multirow{2}{*}{1} & Overfull hbox & Layout warning \\
+                        & Underfull hbox & Layout warning \\
+    \hline
+    2 & Undefined reference & Cross-reference warning \\
+    \hline
+    3 & Undefined control sequence & Fatal error \\
+    \hline
+  \end{tabular}
+  \caption{Warning and error categories platex parses from TeX logs.}
+  \label{tab:categories}
+\end{table}
+
+As shown in Table~\ref{tab:categories}, platex classifies log output into
+distinct categories.
+
+\end{document}

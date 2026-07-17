@@ -1,6 +1,35 @@
 # platex
 
+[![npm version](https://img.shields.io/npm/v/platex.svg)](https://www.npmjs.com/package/platex)
+[![license](https://img.shields.io/npm/l/platex.svg)](LICENSE)
+
 Compile LaTeX to PDF in TypeScript, with output as close to Overleaf as possible. Designed for Next.js apps on Vercel.
+
+## Examples & demo
+
+[`examples/nextjs-demo/`](examples/nextjs-demo/) is a real Next.js App Router docs site (shadcn/ui, Geist, dark mode). Docs and demos are separate: `/docs/rendering/*` is static documentation (explanation + code, zero runtime compute — confirmed by `next build` marking every one of them `○ Static`), while `/demo/*` actually compiles the same "kitchen sink" LaTeX document (math, tables, figures, citations, code, table of contents) live, per request (`ƒ Dynamic`).
+
+| Route | Pattern | What it shows |
+|---|---|---|
+| `/` | — | Overview, install snippet, feature highlights |
+| `/docs/installation` | — | Deploying the service and installing the client library |
+| `/docs/rendering/*` | — | Static docs: how each pattern works, with its code sample |
+| `/docs/api-reference` | — | `compile()`, `CompileOptions`, `CompileResult` |
+| `/demo/ssr` | Server Component | Live: `compile()` runs during the server render; the PDF ships embedded in the initial HTML |
+| `/demo/csr` | Client Component + `fetch` | Live: edit the source in the browser, compile on demand via `POST /api/compile` |
+| `/demo/server-actions` | `'use server'` function | Live: a form submits straight to a server function via `useActionState` |
+| `/demo/route-handlers` | Route Handler | Live: the raw Node.js API route the other patterns call — usable directly (e.g. with curl) |
+
+Run it:
+
+```bash
+npm run build              # build platex itself first — the demo depends on dist/
+cd examples/nextjs-demo
+npm install
+npm run dev
+```
+
+The individual feature `.tex` files it's assembled from (math, lists, tables, figures, bibliography, sectioning, code listings, hyperlinks) live in [`examples/tex/`](examples/tex/).
 
 ## Architecture
 

@@ -1,0 +1,43 @@
+\documentclass{article}
+\usepackage{enumitem}
+
+\title{Lists}
+\author{platex demo}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{Bulleted list}
+\begin{itemize}
+  \item First point
+  \item Second point
+  \begin{itemize}
+    \item Nested point A
+    \item Nested point B
+  \end{itemize}
+  \item Third point
+\end{itemize}
+
+\section{Numbered list}
+\begin{enumerate}
+  \item Preheat the compiler
+  \item Feed it a \texttt{.tex} source
+  \item Collect the PDF
+\end{enumerate}
+
+\section{Description list}
+\begin{description}
+  \item[pdflatex] The classic LaTeX engine.
+  \item[xelatex] Unicode- and system-font-aware engine.
+  \item[tectonic] Self-contained, dependency-free engine used as platex's fallback.
+\end{description}
+
+\section{Custom-labeled list}
+\begin{enumerate}[label=(\alph*)]
+  \item Option one
+  \item Option two
+  \item Option three
+\end{enumerate}
+
+\end{document}

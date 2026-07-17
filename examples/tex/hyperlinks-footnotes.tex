@@ -1,0 +1,31 @@
+\documentclass{article}
+\usepackage{hyperref}
+\hypersetup{colorlinks=true, linkcolor=blue, urlcolor=magenta}
+
+\title{Hyperlinks and Footnotes}
+\author{platex demo}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{External links}
+The platex library targets Overleaf-equivalent output; see
+\url{https://overleaf.com} for comparison, or use a
+\href{https://overleaf.com}{custom link label}.
+
+\section{Internal cross-references}
+This section is labeled for cross-referencing purposes\footnote{Footnotes
+render at the bottom of the page and are automatically numbered.}, and can
+be jumped to via Section~\ref{sec:target} below.
+
+\section{Target section}
+\label{sec:target}
+This is the section referenced above, demonstrating that \texttt{hyperref}
+turns \texttt{\textbackslash ref} output into a clickable internal link in
+the resulting PDF.
+
+Another footnote here\footnote{Footnotes can appear anywhere in the flow of
+text, not just at section boundaries.} to show consecutive numbering.
+
+\end{document}
