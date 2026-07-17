@@ -2,9 +2,8 @@ import { zValidator } from '@hono/zod-validator';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { runLocalPipeline } from '../../local/index.js';
+import { isFilenameValid } from '../../local/utils.js';
 import type { CompileResponse } from '../../types.js';
-
-const SAFE_FILENAME = /^[a-zA-Z0-9._-][a-zA-Z0-9._/-]*$/;
 
 const schema = z.object({
   source: z.string().min(1).max(5_000_000),
@@ -22,7 +21,7 @@ compileRoute.post('/', zValidator('json', schema), async (c) => {
 
   // Validate filenames: no path traversal, no absolute paths
   for (const filename of Object.keys(body.files)) {
-    if (!SAFE_FILENAME.test(filename) || filename.includes('..') || filename.startsWith('/')) {
+    if (!isFilenameValid(filename)) {
       return c.json({ error: `Invalid filename: ${filename}` }, 400);
     }
   }
@@ -51,7 +50,7 @@ compileRoute.post('/', zValidator('json', schema), async (c) => {
 
     return c.json(responseBody);
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return c.json({ error: `Compilation failed: ${message}` }, 500);
+    const name = err instanceof Error ? err.constructor.name : 'Error';
+    return c.json({ error: `Compilation failed: ${name}` }, 500);
   }
 });

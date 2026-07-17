@@ -1,9 +1,22 @@
 import { DEFAULT_BIB, DEFAULT_ENGINE, DEFAULT_PASSES, DEFAULT_TIMEOUT } from '../defaults.js';
 import type { CompileOptions, CompileRequest, CompileResponse, CompileResult } from '../types.js';
 
+function isValidServiceUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 export async function callRemote(source: string, options: CompileOptions): Promise<CompileResult> {
   const serviceUrl = options.serviceUrl as string;
   const timeout = options.timeout ?? DEFAULT_TIMEOUT;
+
+  if (!isValidServiceUrl(serviceUrl)) {
+    throw new TypeError('platex: serviceUrl must be an http or https URL');
+  }
 
   const body: CompileRequest = {
     source,
@@ -28,10 +41,9 @@ export async function callRemote(source: string, options: CompileOptions): Promi
       body: JSON.stringify(body),
       signal: controller.signal,
     });
-  } catch (err) {
+  } catch {
     clearTimeout(networkTimeout);
-    const message = err instanceof Error ? err.message : String(err);
-    throw new Error(`platex: failed to reach service at ${serviceUrl}: ${message}`);
+    throw new Error('platex: failed to reach service');
   } finally {
     clearTimeout(networkTimeout);
   }

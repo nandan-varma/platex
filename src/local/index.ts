@@ -1,4 +1,4 @@
-import { access, constants, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { DEFAULT_BIB, DEFAULT_ENGINE, DEFAULT_PASSES, DEFAULT_TIMEOUT } from '../defaults.js';
@@ -6,20 +6,7 @@ import type { CompileOptions, CompileResult } from '../types.js';
 import { parseLog } from './log-parser.js';
 import { runPasses } from './passes.js';
 import { resolveTectonicBinary, runTectonic } from './tectonic.js';
-
-const SAFE_FILENAME = /^[a-zA-Z0-9._-][a-zA-Z0-9._/-]*$/;
-
-async function isEngineAvailable(engine: string): Promise<boolean> {
-  try {
-    await access(engine, constants.X_OK);
-    return true;
-  } catch {
-    // engine is a name, not a path — check via which
-    const { spawnProcess } = await import('./compiler.js');
-    const { exitCode } = await spawnProcess('which', [engine], process.cwd(), 5_000);
-    return exitCode === 0;
-  }
-}
+import { isEngineAvailable, validateFilename } from './utils.js';
 
 export async function runLocalPipeline(
   source: string,
@@ -39,9 +26,7 @@ export async function runLocalPipeline(
 
     // Write additional files, creating subdirectories as needed
     for (const [filename, content] of Object.entries(files)) {
-      if (!SAFE_FILENAME.test(filename) || filename.includes('..') || filename.startsWith('/')) {
-        throw new TypeError(`platex: invalid filename "${filename}"`);
-      }
+      validateFilename(filename);
       const dest = join(tmpDir, filename);
       const dir = dirname(dest);
       if (dir !== tmpDir) {

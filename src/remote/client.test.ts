@@ -119,7 +119,7 @@ describe('callRemote', () => {
     );
   });
 
-  it('wraps a network-level fetch failure with the service URL', async () => {
+  it('wraps a network-level fetch failure without leaking the service URL', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => {
@@ -128,7 +128,7 @@ describe('callRemote', () => {
     );
 
     await expect(callRemote('src', { serviceUrl: 'http://localhost:3001' })).rejects.toThrow(
-      /platex: failed to reach service at http:\/\/localhost:3001/,
+      /platex: failed to reach service/,
     );
   });
 
