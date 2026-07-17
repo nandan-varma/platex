@@ -24,6 +24,16 @@ jobs:
 
       - run: npm run typecheck
 
+      # The test suite compiles real LaTeX via a bundled Tectonic binary
+      # (gitignored, not committed) rather than mocking compilation.
+      - name: Cache Tectonic binary
+        uses: actions/cache@v4
+        with:
+          path: bin/tectonic
+          key: tectonic-0.15.0-${{ runner.os }}
+
+      - run: node scripts/download-tectonic.mjs
+
       - run: npm test
 
       - run: npm run build

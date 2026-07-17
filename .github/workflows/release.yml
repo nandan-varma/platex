@@ -22,11 +22,15 @@ jobs:
 
       - run: npm ci
 
-      - run: npm run typecheck
+      # npm publish runs the prepublishOnly script (typecheck + test + build)
+      # automatically; the test suite compiles real LaTeX via this binary.
+      - name: Cache Tectonic binary
+        uses: actions/cache@v4
+        with:
+          path: bin/tectonic
+          key: tectonic-0.15.0-${{ runner.os }}
 
-      - run: npm test
-
-      - run: npm run build
+      - run: node scripts/download-tectonic.mjs
 
       - run: npm publish --provenance --access public
         env:
