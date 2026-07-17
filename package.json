@@ -1,6 +1,6 @@
 {
   "name": "@nandan-varma/platex",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Compile LaTeX to PDF binary matching Overleaf output, with Next.js support",
   "license": "MIT",
   "author": "Nandan Varma",
