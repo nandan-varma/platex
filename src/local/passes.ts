@@ -63,6 +63,7 @@ export async function runPasses(
     });
     if (bibLog) {
       allLogs.push(bibLog);
+      /* v8 ignore next -- 'biber' arm needs a real biber binary (absent in CI); parseBiberLog is covered directly in log-parser.test.ts */
       const parsedBib = parseLog(bibLog.log, bibliography === 'biber' ? 'biber' : 'bibtex');
       allErrors.push(...parsedBib.errors);
       allWarnings.push(...parsedBib.warnings);

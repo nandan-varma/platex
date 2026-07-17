@@ -127,6 +127,24 @@ describe('createPlatexClient (Node entry)', () => {
     expect(capturedUrl).toBe('http://localhost:3001/health');
   });
 
+  it('health() sends Authorization: Bearer <apiKey> when the client is configured with one', async () => {
+    let capturedHeaders: Record<string, string> = {};
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init: RequestInit) => {
+        capturedHeaders = init.headers as Record<string, string>;
+        return new Response('ok', { status: 200 });
+      }),
+    );
+
+    const client = createPlatexClient({
+      serviceUrl: 'http://localhost:3001',
+      apiKey: 'health-key',
+    });
+    await expect(client.health()).resolves.toBe(true);
+    expect(capturedHeaders.Authorization).toBe('Bearer health-key');
+  });
+
   it('health() resolves false when the service is unreachable', async () => {
     vi.stubGlobal(
       'fetch',

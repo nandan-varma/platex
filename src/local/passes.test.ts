@@ -197,4 +197,55 @@ describe('runPasses', () => {
     expect(result.errors).toHaveLength(1);
     expect(result.errors[0]?.message).toBe('Some problem.');
   });
+
+  it('keeps genuinely different errors reported on passes 2 and 3 (no over-deduplication)', async () => {
+    tmpDir = await setup('DISTINCT_ERROR_PER_PASS document');
+
+    const result = await runPasses(tmpDir, {
+      engine: FAKE_LATEX,
+      passes: 3, // force all three passes
+      bibliography: 'bibtex',
+      timeout: 5_000,
+    });
+
+    expect(result.logs).toHaveLength(3);
+    // One distinct error per pass — none collapsed by the dedup guard.
+    expect(result.errors.map((e) => e.message)).toEqual([
+      'Distinct problem 1.',
+      'Distinct problem 2.',
+      'Distinct problem 3.',
+    ]);
+  });
+
+  it('does not collapse errors that share a message but differ in line number', async () => {
+    tmpDir = await setup('SAME_MSG_DIFF_LINE document');
+
+    const result = await runPasses(tmpDir, {
+      engine: FAKE_LATEX,
+      passes: 3,
+      bibliography: 'bibtex',
+      timeout: 5_000,
+    });
+
+    expect(result.logs).toHaveLength(3);
+    // Same message each pass, but lines 1/2/3 — all three kept.
+    expect(result.errors).toHaveLength(3);
+    expect(result.errors.map((e) => e.line)).toEqual([1, 2, 3]);
+  });
+
+  it('stops when a forced later pass exits non-zero, keeping the error from that pass', async () => {
+    tmpDir = await setup('FAIL_ON_PASS_2 document');
+
+    const result = await runPasses(tmpDir, {
+      engine: FAKE_LATEX,
+      passes: 3, // asks for three passes, but pass 2 fails
+      bibliography: 'bibtex',
+      timeout: 5_000,
+    });
+
+    // pass 1 (ok) -> pass 2 (exit 1) -> stop before pass 3
+    expect(result.logs).toHaveLength(2);
+    expect(result.logs[1]?.exitCode).toBe(1);
+    expect(result.errors.some((e) => e.message === 'Pass two failed.')).toBe(true);
+  });
 });

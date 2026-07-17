@@ -19,6 +19,18 @@ describe('createPlatexClient (edge entry, platex/client)', () => {
     await expect(client.compile('src')).rejects.toThrow(/platex\/client.*only compiles remotely/s);
   });
 
+  it('rejects an empty or non-string source with a TypeError before any network call', async () => {
+    const client = createPlatexClient({ serviceUrl: 'http://localhost:3001' });
+    await expect(client.compile('')).rejects.toThrow(/source must be a non-empty string/);
+  });
+
+  it('rejects a source that exceeds the configured byte limit', async () => {
+    const client = createPlatexClient({ serviceUrl: 'http://localhost:3001' });
+    await expect(
+      client.compile('x'.repeat(20), { limits: { maxSourceBytes: 10 } }),
+    ).rejects.toThrow(/exceeds 10 byte limit/);
+  });
+
   it('compiles remotely when a serviceUrl is configured — never touches local TeX', async () => {
     vi.stubGlobal(
       'fetch',

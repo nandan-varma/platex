@@ -193,6 +193,15 @@ I found no \\bibstyle command---while reading file main.aux
     expect(errors[0]?.file).toBe('main.bib');
     expect(errors[0]?.source).toBe('bibtex');
   });
+
+  it('parses a bibtex error with no parseable location as file:null, line:null', () => {
+    const log = `This is BibTeX, Version 0.99d\nAborted: internal error, cannot continue\n`;
+    const { errors } = parseLog(log, 'bibtex');
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.file).toBeNull();
+    expect(errors[0]?.line).toBeNull();
+    expect(errors[0]?.source).toBe('bibtex');
+  });
 });
 
 describe('parseLog - biber', () => {

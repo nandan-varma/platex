@@ -114,6 +114,7 @@ export function createCompileRoute(config: CompileRouteConfig = {}): Hono {
       console.error('[platex] compile failed:', err);
       const name = err instanceof Error ? err.constructor.name : 'Error';
       return c.json({ error: `Compilation failed: ${name}` }, 500);
+      /* v8 ignore next 3 -- finally's exceptional-entry branch is unreachable: catch handles every error and only returns */
     } finally {
       activeCompiles--;
     }

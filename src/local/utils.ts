@@ -25,6 +25,7 @@ export async function isCommandAvailable(cmd: string): Promise<boolean> {
   } catch {
     // cmd is a name, not a path — resolve it via the platform's PATH lookup tool.
     const { spawnProcess } = await import('./compiler.js');
+    /* v8 ignore next -- 'where' arm is Windows-only; CI runs on POSIX */
     const lookupTool = process.platform === 'win32' ? 'where' : 'which';
     const { exitCode } = await spawnProcess(lookupTool, [cmd], process.cwd(), 5_000);
     return exitCode === 0;

@@ -26,6 +26,7 @@ export function resolveLimits(overrides?: CompileLimits): Required<CompileLimits
  * also ships in edge/browser-like runtimes where `process` may not exist.
  */
 function readEnv(name: string): string | undefined {
+  /* v8 ignore next -- defensive guard for non-Node runtimes; `process` always exists under Node/vitest */
   if (typeof process === 'undefined' || !process.env) return undefined;
   return process.env[name];
 }

@@ -268,6 +268,35 @@ describe('callRemote', () => {
     expect(customFetch).toHaveBeenCalledOnce();
   });
 
+  it('throws a TypeError when serviceUrl is not a valid URL', async () => {
+    await expect(callRemote('src', { serviceUrl: 'not a url' })).rejects.toThrow(TypeError);
+  });
+
+  it('throws a TypeError for a non-http(s) serviceUrl scheme', async () => {
+    await expect(callRemote('src', { serviceUrl: 'ftp://example.com' })).rejects.toThrow(
+      /http or https/,
+    );
+  });
+
+  it('aborts immediately when handed an already-aborted signal', async () => {
+    const fetchMock = vi.fn((_url: string, init: RequestInit) => {
+      return new Promise((_resolve, reject) => {
+        if (init.signal?.aborted) {
+          reject(new DOMException('The operation was aborted.', 'AbortError'));
+          return;
+        }
+        init.signal?.addEventListener('abort', () => {
+          reject(new DOMException('The operation was aborted.', 'AbortError'));
+        });
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      callRemote('src', { serviceUrl: 'http://localhost:3001', signal: AbortSignal.abort() }),
+    ).rejects.toThrow(/platex: failed to reach service/);
+  });
+
   describe('retry', () => {
     it('retries a 503 up to `retry` extra attempts, then succeeds', async () => {
       let attempts = 0;

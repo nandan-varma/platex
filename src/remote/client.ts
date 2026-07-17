@@ -116,15 +116,15 @@ export async function callRemote(source: string, options: CompileOptions): Promi
   }
 
   const maxAttempts = Math.max(1, (options.retry ?? 0) + 1);
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+  // Retryable earlier attempts loop; the final attempt falls through and is
+  // returned/thrown directly, so there's no unreachable post-loop dead code.
+  for (let attempt = 1; attempt < maxAttempts; attempt++) {
     try {
       return await callRemoteOnce(source, options, serviceUrl);
     } catch (err) {
-      const retryable = err instanceof RemoteCompileError && err.retryable;
-      if (!retryable || attempt === maxAttempts) throw err;
+      if (!(err instanceof RemoteCompileError && err.retryable)) throw err;
       await delay(300 * attempt);
     }
   }
-  /* istanbul ignore next -- loop always returns or throws above */
-  throw new Error('platex: failed to reach service');
+  return callRemoteOnce(source, options, serviceUrl);
 }

@@ -21,6 +21,7 @@ function buildFileStack(log: string): Map<number, string | null> {
   const FILE_OPEN = /\(((?:\.\.?\/)[^\s)]+\.(tex|sty|cls|def|cfg|fd|bbl))/g;
 
   for (let i = 0; i < lines.length; i++) {
+    /* v8 ignore next -- `?? ''` fallback is unreachable: i is always in-bounds (noUncheckedIndexedAccess) */
     const line = lines[i] ?? '';
 
     FILE_OPEN.lastIndex = 0;
@@ -71,6 +72,7 @@ function parseLatexLog(log: string): { errors: LatexError[]; warnings: LatexWarn
   const warnings: LatexWarning[] = [];
 
   for (let i = 0; i < lines.length; i++) {
+    /* v8 ignore next -- `?? ''` fallback is unreachable: i is always in-bounds (noUncheckedIndexedAccess) */
     const line = lines[i] ?? '';
 
     // --- Errors (lines starting with "!") ---
@@ -82,6 +84,7 @@ function parseLatexLog(log: string): { errors: LatexError[]; warnings: LatexWarn
       let context: string | null = null;
 
       for (let j = i + 1; j < Math.min(i + 10, lines.length); j++) {
+        /* v8 ignore next -- `?? ''` fallback is unreachable: j is always in-bounds (noUncheckedIndexedAccess) */
         const ahead = lines[j] ?? '';
         const lineMatch = ahead.match(/^l\.(\d+)\s*(.*)/);
         if (lineMatch) {
@@ -186,9 +189,7 @@ function parseBibtexLog(log: string): { errors: LatexError[]; warnings: LatexWar
   const warnings: LatexWarning[] = [];
   const lines = log.split('\n');
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i] ?? '';
-
+  for (const line of lines) {
     if (line.startsWith('I found no ') || line.match(/^---/)) {
       // section separator, skip
       continue;
@@ -210,6 +211,7 @@ function parseBibtexLog(log: string): { errors: LatexError[]; warnings: LatexWar
       const locationMatch = line.match(/--line (\d+) of file (.+)$/);
       errors.push({
         type: 'error',
+        /* v8 ignore next -- `?? null` is unreachable: capture group 2 is always present when locationMatch is truthy */
         file: locationMatch ? (locationMatch[2] ?? null) : null,
         line: locationMatch ? parseInt(locationMatch[1] as string, 10) : null,
         message: line.trim(),

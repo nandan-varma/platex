@@ -19,6 +19,7 @@ function getBundledBinaryCandidates(): string[] {
   try {
     const dir = dirname(fileURLToPath(import.meta.url));
     candidates.push(join(dir, '..', 'bin', 'tectonic'), join(dir, '..', '..', 'bin', 'tectonic'));
+    /* v8 ignore next 3 -- import.meta.url is always available under ESM/vitest; guards a non-ESM bundling edge case */
   } catch {
     // import.meta unavailable in this context — fall through to cwd-based candidate below
   }
@@ -49,6 +50,7 @@ export async function resolveTectonicBinary(): Promise<string | null> {
     await chmod(stagingPath, 0o755);
     await rename(stagingPath, TMP_BINARY);
     return TMP_BINARY;
+    /* v8 ignore next 5 -- concurrent-copy race recovery; not deterministically reproducible in tests */
   } catch {
     await rm(stagingPath, { force: true });
     // Another concurrent call may have finished the rename first.

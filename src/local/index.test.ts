@@ -7,6 +7,18 @@ import { runLocalPipeline } from './index.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FIXTURES = join(__dirname, '..', '..', 'test', 'fixtures', 'tex');
+// Executable stand-in for a system TeX engine. Passing its absolute path as
+// `engine` makes isEngineAvailable() succeed, so runLocalPipeline takes the
+// system-TeX-Live (runPasses) branch instead of falling back to Tectonic.
+const FAKE_LATEX = join(
+  __dirname,
+  '..',
+  '..',
+  'test',
+  'fixtures',
+  'fake-engines',
+  'fake-latex.mjs',
+);
 
 async function readFixture(name: string): Promise<string> {
   return readFile(join(FIXTURES, name), 'utf-8');
@@ -84,6 +96,35 @@ describe('runLocalPipeline (real Tectonic compilation)', () => {
     },
     TIMEOUT,
   );
+
+  it(
+    'creates nested subdirectories for files keyed with a path segment',
+    async () => {
+      const source = await readFixture('minimal.tex');
+      // The file is irrelevant to the minimal document; we only assert that
+      // writing a subdirectory-keyed file succeeds (mkdir -p branch) and the
+      // compile still produces a PDF.
+      const result = await runLocalPipeline(source, {
+        files: { 'assets/data/notes.txt': Buffer.from('nested') },
+      });
+
+      expect(result.pdf).not.toBeNull();
+      expect(result.errors).toHaveLength(0);
+    },
+    TIMEOUT,
+  );
+
+  it('takes the system-TeX-Live pipeline (runPasses) when the engine resolves as an executable', async () => {
+    // FAKE_LATEX is executable, so isEngineAvailable() reports true and the
+    // pipeline runs the multi-pass runPasses path rather than Tectonic. The
+    // fake engine writes a %PDF stub, so we get a non-null PDF back.
+    const result = await runLocalPipeline('clean document', { engine: FAKE_LATEX as never });
+
+    expect(result.pdf).not.toBeNull();
+    expect(result.pdf?.subarray(0, 5).toString('utf-8')).toBe('%PDF-');
+    expect(result.logs[0]?.engine).toBe(FAKE_LATEX);
+    expect(result.errors).toHaveLength(0);
+  });
 
   it(
     'throws a TypeError for path-traversal filenames',

@@ -227,6 +227,7 @@ async function watchLoop(ctx: {
   const watched = new Set<string>();
 
   const run = async (): Promise<void> => {
+    /* v8 ignore next 4 -- re-entrancy guard for a change landing mid-compile; racy to trigger deterministically */
     if (running) {
       rerunRequested = true;
       return;
@@ -252,6 +253,7 @@ async function watchLoop(ctx: {
   const syncWatchers = (paths: string[]): void => {
     const next = new Set([ctx.inputPath, ...paths]);
     for (const path of watched) {
+      /* v8 ignore next 4 -- unwatch path only runs when a previously-attached file disappears between compiles; racy to trigger */
       if (!next.has(path)) {
         unwatchFile(path, onChange);
         watched.delete(path);

@@ -9,6 +9,10 @@
 //   HAS_CITATION     -> writes an aux file with \citation{}/\bibdata{} so bibtex triggers
 //   NO_LOG_FILE      -> never writes main.log (forces stdout fallback)
 //   CRASH            -> exits 2 with no "!"-formatted error (simulates a hard crash)
+//   FAIL_ON_PASS_2   -> pass 1 succeeds; pass 2 exits 1 with a fatal error
+//   DISTINCT_ERROR_PER_PASS -> each pass reports a *different* non-fatal "!" error
+//                              (message + line vary by pass) to exercise the
+//                              cross-pass "add genuinely new errors" branch
 //   SLEEP_<ms>       -> blocks synchronously for <ms> before doing anything else
 //
 // Tracks invocation count per tmpDir via a counter file, so multi-pass
@@ -41,6 +45,11 @@ if (source.includes('HAS_CITATION')) {
   writeFileSync(join(cwd, 'main.aux'), '');
 }
 
+if (source.includes('FAIL_ON_PASS_2') && count === 2) {
+  writeFileSync(join(cwd, 'main.log'), ['(./main.tex', '! Pass two failed.', 'l.2 x'].join('\n'));
+  process.exit(1);
+}
+
 if (source.includes('FATAL_ERROR')) {
   const log = [
     'This is pdfTeX, Version fake',
@@ -65,6 +74,19 @@ if (source.includes('SOFT_ERROR_TWICE')) {
   // to exercise passes.ts's cross-pass error deduplication.
   logLines.push('! Some problem.');
   logLines.push('l.5 x');
+}
+if (source.includes('DISTINCT_ERROR_PER_PASS')) {
+  // Non-fatal, but a *different* message + line each pass, to exercise the
+  // branch that appends genuinely new (non-duplicate) errors on passes 2 & 3.
+  logLines.push(`! Distinct problem ${count}.`);
+  logLines.push(`l.${count} x`);
+}
+if (source.includes('SAME_MSG_DIFF_LINE')) {
+  // Identical message but a different line each pass: dedup keys on message
+  // AND line, so these must NOT be collapsed (exercises the line-comparison
+  // half of the dedup predicate).
+  logLines.push('! Recurring problem.');
+  logLines.push(`l.${count} x`);
 }
 if (needsRerunNow) {
   logLines.push('LaTeX Warning: Label(s) may have changed. Rerun to get cross-references right.');
