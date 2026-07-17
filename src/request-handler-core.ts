@@ -1,4 +1,20 @@
-import type { CompileOptions, CompileResult, Engine, PassCount, PlatexClient } from './types.js';
+import {
+  BIB_ENGINES,
+  base64ToBytes,
+  bytesToBase64,
+  ENGINES,
+  MAX_TIMEOUT_MS,
+  MIN_TIMEOUT_MS,
+  PASS_COUNTS,
+} from './defaults.js';
+import type {
+  BibEngine,
+  CompileOptions,
+  CompileResult,
+  Engine,
+  PassCount,
+  PlatexClient,
+} from './types.js';
 
 export interface HandleCompileRequestOptions extends CompileOptions {
   /**
@@ -70,7 +86,7 @@ export function makeRequestHandler(
         if (typeof value !== 'string') {
           return jsonError(`\`files.${name}\` must be a base64-encoded string`, 400);
         }
-        files[name] = Buffer.from(value, 'base64');
+        files[name] = base64ToBytes(value);
       }
     }
 
@@ -80,14 +96,45 @@ export function makeRequestHandler(
     // field is checked against its own (non-`| undefined`) CompileOptions
     // type individually, instead of tripping exactOptionalPropertyTypes on
     // the merged object literal's inferred shape.
+    //
+    // Every body field is validated against the known enums/bounds before it
+    // reaches compile(): `engine` in particular becomes a spawn() target on
+    // the local path, so a request body must never smuggle an arbitrary
+    // command name through, and `timeout` bounds the server-side wall clock.
     const mergedOptions: CompileOptions = { ...compileOptions };
-    if (body.engine !== undefined) mergedOptions.engine = body.engine as Engine;
-    if (body.passes !== undefined) mergedOptions.passes = body.passes as PassCount;
+    if (body.engine !== undefined) {
+      if (!(ENGINES as readonly unknown[]).includes(body.engine)) {
+        return jsonError(`\`engine\` must be one of: ${ENGINES.join(', ')}`, 400);
+      }
+      mergedOptions.engine = body.engine as Engine;
+    }
+    if (body.passes !== undefined) {
+      if (!(PASS_COUNTS as readonly unknown[]).includes(body.passes)) {
+        return jsonError(`\`passes\` must be one of: ${PASS_COUNTS.join(', ')}`, 400);
+      }
+      mergedOptions.passes = body.passes as PassCount;
+    }
     if (body.bibliography !== undefined) {
-      mergedOptions.bibliography = body.bibliography as NonNullable<CompileOptions['bibliography']>;
+      if (!(BIB_ENGINES as readonly unknown[]).includes(body.bibliography)) {
+        return jsonError(`\`bibliography\` must be one of: ${BIB_ENGINES.join(', ')}`, 400);
+      }
+      mergedOptions.bibliography = body.bibliography as BibEngine;
     }
     if (files !== undefined) mergedOptions.files = files;
-    if (body.timeout !== undefined) mergedOptions.timeout = body.timeout as number;
+    if (body.timeout !== undefined) {
+      if (
+        typeof body.timeout !== 'number' ||
+        !Number.isInteger(body.timeout) ||
+        body.timeout < MIN_TIMEOUT_MS ||
+        body.timeout > MAX_TIMEOUT_MS
+      ) {
+        return jsonError(
+          `\`timeout\` must be an integer between ${MIN_TIMEOUT_MS} and ${MAX_TIMEOUT_MS} milliseconds`,
+          400,
+        );
+      }
+      mergedOptions.timeout = body.timeout;
+    }
 
     let result: CompileResult;
     try {
@@ -110,7 +157,7 @@ export function makeRequestHandler(
     if (responseFormat === 'json') {
       return jsonResponse(
         {
-          pdf: result.pdf ? result.pdf.toString('base64') : null,
+          pdf: result.pdf ? bytesToBase64(result.pdf) : null,
           errors: result.errors,
           warnings: result.warnings,
         },

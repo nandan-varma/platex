@@ -1,4 +1,4 @@
-FROM texlive/texlive:latest
+FROM texlive/texlive:TL2024-historic
 
 # Install Node.js 20 LTS via NodeSource (modern approach)
 RUN apt-get update && apt-get install -y --no-install-recommends \

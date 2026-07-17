@@ -3,7 +3,15 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Engine, RawPassLog } from '../types.js';
 
-const LATEX_FLAGS = ['-interaction=nonstopmode', '-halt-on-error', '-file-line-error'];
+// -no-shell-escape: TeX Live's default is *restricted* shell escape (a
+// whitelist of \write18 commands); the compile service runs untrusted
+// documents, so disable even that.
+const LATEX_FLAGS = [
+  '-interaction=nonstopmode',
+  '-halt-on-error',
+  '-file-line-error',
+  '-no-shell-escape',
+];
 
 export interface RunEngineOptions {
   engine: Engine;

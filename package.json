@@ -1,6 +1,6 @@
 {
   "name": "@nandan-varma/platex",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "description": "Compile LaTeX to PDF binary with accurate output, with Next.js support",
   "license": "MIT",
   "author": "Nandan Varma",
@@ -43,7 +43,7 @@
     }
   },
   "bin": {
-    "platex": "./dist/cli.js"
+    "platex": "dist/cli.js"
   },
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",

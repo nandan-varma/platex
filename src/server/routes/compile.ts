@@ -1,7 +1,7 @@
 import { zValidator } from '@hono/zod-validator';
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { resolveLimits } from '../../defaults.js';
+import { MAX_TIMEOUT_MS, MIN_TIMEOUT_MS, resolveLimits, utf8ByteLength } from '../../defaults.js';
 import { runLocalPipeline } from '../../local/index.js';
 import { isFilenameValid } from '../../local/utils.js';
 import type { CompileLimits, CompileResponse } from '../../types.js';
@@ -21,14 +21,24 @@ function buildSchema(limits: Required<CompileLimits>) {
 
   return z
     .object({
-      source: z.string().min(1).max(limits.maxSourceBytes),
-      engine: z.enum(['pdflatex', 'xelatex', 'lualatex']).default('pdflatex'),
+      // .max() counts UTF-16 code units, not bytes — a multibyte source can
+      // pass Zod but exceed the byte limit.  The .refine() below enforces the
+      // real byte cap so the error surfaces as a clean 400 instead of a 500
+      // from runLocalPipeline's own check.
+      source: z
+        .string()
+        .min(1)
+        .max(limits.maxSourceBytes * 4)
+        .refine((src) => utf8ByteLength(src) <= limits.maxSourceBytes, {
+          message: `source exceeds ${limits.maxSourceBytes} byte limit`,
+        }),
+      engine: z.enum(['pdflatex', 'xelatex', 'lualatex', 'tectonic']).default('pdflatex'),
       passes: z
         .union([z.literal('auto'), z.literal(1), z.literal(2), z.literal(3)])
         .default('auto'),
       bibliography: z.enum(['bibtex', 'biber', 'none']).default('bibtex'),
       files: z.record(z.string(), z.string().max(perFileBase64Cap)).default({}),
-      timeout: z.number().int().min(1_000).max(120_000).default(30_000),
+      timeout: z.number().int().min(MIN_TIMEOUT_MS).max(MAX_TIMEOUT_MS).default(30_000),
     })
     .refine((body) => Object.keys(body.files).length <= limits.maxFilesCount, {
       message: `too many files (max ${limits.maxFilesCount})`,

@@ -3,10 +3,8 @@ import { chmod, mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { resolveTectonicBinary } from './tectonic.js';
+import { resolveTectonicBinary, TMP_BINARY } from './tectonic.js';
 import { clearCommandAvailabilityCache } from './utils.js';
-
-const TMP_BINARY = '/tmp/platex-tectonic';
 
 describe('resolveTectonicBinary', () => {
   const originalPath = process.env.PATH;

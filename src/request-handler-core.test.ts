@@ -69,6 +69,41 @@ describe('makeRequestHandler - request body handling', () => {
     expect(res.status).toBe(400);
     expect((await json(res)).error).toMatch(/files\.a\.tex.*base64/);
   });
+
+  it('rejects an invalid `bibliography` value with 400', async () => {
+    const handler = makeRequestHandler(async () => okResult);
+    const res = await handler(post({ source: 'x', bibliography: 'invalid' }));
+    expect(res.status).toBe(400);
+    expect((await json(res)).error).toMatch(/bibliography/);
+  });
+
+  it('rejects an invalid `engine` value with 400', async () => {
+    const handler = makeRequestHandler(async () => okResult);
+    const res = await handler(post({ source: 'x', engine: 'invalid-engine' }));
+    expect(res.status).toBe(400);
+    expect((await json(res)).error).toMatch(/engine/);
+  });
+
+  it('rejects an invalid `passes` value with 400', async () => {
+    const handler = makeRequestHandler(async () => okResult);
+    const res = await handler(post({ source: 'x', passes: 'invalid' }));
+    expect(res.status).toBe(400);
+    expect((await json(res)).error).toMatch(/passes/);
+  });
+
+  it('rejects a non-integer `timeout` with 400', async () => {
+    const handler = makeRequestHandler(async () => okResult);
+    const res = await handler(post({ source: 'x', timeout: 'not-a-number' }));
+    expect(res.status).toBe(400);
+    expect((await json(res)).error).toMatch(/timeout/);
+  });
+
+  it('rejects a `timeout` below the minimum with 400', async () => {
+    const handler = makeRequestHandler(async () => okResult);
+    const res = await handler(post({ source: 'x', timeout: 100 }));
+    expect(res.status).toBe(400);
+    expect((await json(res)).error).toMatch(/timeout/);
+  });
 });
 
 describe('makeRequestHandler - compile error mapping', () => {

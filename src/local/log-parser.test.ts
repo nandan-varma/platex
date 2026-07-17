@@ -409,4 +409,11 @@ l.3 \\badcmd
     expect(errors).toHaveLength(1);
     expect(errors[0]?.file).toBeNull();
   });
+
+  it('normalizes CRLF line endings before parsing', () => {
+    const crlf = NESTED_FILE_ERROR_LOG.replace(/\n/g, '\r\n');
+    const { errors } = parseLog(crlf);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.file).toBe('./chapter1.tex');
+  });
 });

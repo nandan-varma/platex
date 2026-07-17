@@ -44,6 +44,9 @@ export function parseLog(
   errors: LatexError[];
   warnings: LatexWarning[];
 } {
+  // Windows TeX distributions (MiKTeX) write CRLF logs; stray `\r` defeats the
+  // blank-line and end-of-line checks below. Normalize once, only when needed.
+  if (log.includes('\r')) log = log.replace(/\r/g, '');
   if (source === 'bibtex') return parseBibtexLog(log);
   if (source === 'biber') return parseBiberLog(log);
   return parseLatexLog(log);
@@ -276,6 +279,8 @@ const RERUN_PATTERNS = [
   /Rerun to get cross-references right/,
   /Rerun to get outlines right/,
   /Label\(s\) may have changed\. Rerun/,
+  // biblatex's post-biber hint ("LaTeX Warning: Please rerun LaTeX.")
+  /Please rerun LaTeX/,
   /Package natbib Warning:.*rerun/i,
   /Package rerunfilecheck Warning:/i,
   /Package longtable Warning:.*rerun/i,

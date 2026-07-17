@@ -129,6 +129,17 @@ describe('callRemote', () => {
     );
   });
 
+  it('throws retryable error when the service returns 200 with non-JSON body', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('not json', { status: 200 })),
+    );
+
+    await expect(callRemote('src', { serviceUrl: 'http://localhost:3001' })).rejects.toThrow(
+      /invalid response body/,
+    );
+  });
+
   it('wraps a network-level fetch failure without leaking the service URL', async () => {
     vi.stubGlobal(
       'fetch',

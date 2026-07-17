@@ -23,7 +23,10 @@ npm run build:server # tsup --config tsup.server.config.ts — bundled dist/serv
 npm run build:vercel # download-tectonic.mjs (SHA256-pinned) + build:server — the Docker/Vercel image build that bundles the Tectonic binary
 npm run dev          # tsx src/server/index.ts — run the standalone HTTP server locally
 npm run test:watch   # vitest (watch mode); vitest run <file> for a single test file
+npm run coverage     # vitest run --coverage — thresholds are 100% (see "Tests" below)
 ```
+
+Tests compile real LaTeX via a bundled Tectonic binary at `bin/tectonic` (gitignored). If Tectonic-dependent tests fail with a missing binary, stage it first: `node scripts/download-tectonic.mjs` (SHA256-pinned download).
 
 ## Architecture
 
@@ -57,6 +60,14 @@ src/
     routes/compile.ts        # createCompileRoute(config?) — POST /compile factory with Zod validation
 ```
 
+Beyond `src/`:
+- `api/index.ts` — Vercel function entry: wraps `createApp()` with `hono/vercel` (with `bodyParser: false`)
+- `docker/` — Dockerfile + docker-compose for the standalone HTTP service (consumes `dist/server.cjs` from `build:server`)
+- `docs/` — standalone Astro docs site with its own `package.json`; not part of the npm package
+- `examples/` — sample `.tex` inputs, assets, and a Next.js demo
+- `test/fixtures/` — fake TeX engines, captured logs, and `.tex` sources used by the tests
+- `bin/tectonic` — gitignored staged Tectonic binary (see download note under Build / Test / Lint)
+
 Why so many small files at the top level instead of one `index.ts`: `client-core.ts`/`request-handler-core.ts` contain the actual logic (option merging, retry-free glue, Request/Response shaping) and are edge-safe (no Node built-ins) — each entry point (`index.ts`, `client-entry.ts`) supplies its own `compile` implementation into that shared core rather than duplicating the logic. Don't merge these back into one file; that's what makes `platex/client` genuinely edge-safe rather than just "doesn't happen to use `fs` today."
 
 ## Entry points
@@ -69,7 +80,7 @@ Why so many small files at the top level instead of one `index.ts`: `client-core
 
 There is also a **bin**: `package.json`'s `"bin": { "platex": "./dist/cli.js" }`, built from `src/cli-main.ts` by the second tsup config object (ESM-only, shebang banner, `clean: false` so it doesn't wipe the library build that runs first). CLI flags map 1:1 onto `CompileOptions` — a new compile option should get a matching flag, not CLI-only behavior.
 
-When adding a new top-level export, decide which entry point(s) it belongs in and update `tsup.config.ts`'s `entry` map + `package.json`'s `exports` if you add a new entry point (not needed for adding exports to an existing one). If touching `client-core.ts`/`request-handler-core.ts`/`defaults.ts`, verify edge-safety after building: `grep -n "require(\|from '" dist/client.js` should show no `node:` specifiers.
+When adding a new top-level export, decide which entry point(s) it belongs in and update `tsup.config.ts`'s `entry` map + `package.json`'s `exports` if you add a new entry point (not needed for adding exports to an existing one). If touching `client-core.ts`/`request-handler-core.ts`/`defaults.ts`, verify edge-safety after building: `grep -n "require(\|from '" dist/client.js` should show no `node:` specifiers. Also verify no bare `Buffer.` references: `grep -nE '\bBuffer\.' dist/client.js` should be empty.
 
 ## Conventions
 
@@ -77,7 +88,9 @@ When adding a new top-level export, decide which entry point(s) it belongs in an
 - **ESM-first** (`"type": "module"` in package.json), uses `.js` extensions in imports
 - **Naming**: `camelCase` for functions/variables, `PascalCase` for types/interfaces, `kebab-case` for files
 - **Error handling**: throw `TypeError` for invalid inputs, return structured error objects for compilation failures
-- **Tests**: colocated with source (`*.test.ts`), use `describe`/`it`/`expect` from vitest, real child processes/real HTTP for integration tests — mock `fetch` only for the remote-client-layer tests (option merging, headers, retry), not for anything that could instead spawn the real fake-engine fixtures or bundled Tectonic
+- **Tests**: colocated with source (`*.test.ts`), use `describe`/`it`/`expect` from vitest, real child processes/real HTTP for integration tests — mock `fetch` only for the remote-client-layer tests (option merging, headers, retry), not for anything that could instead spawn the real fake-engine fixtures or bundled Tectonic. Shared fixtures live in `test/fixtures/` (`fake-engines/`, `logs/`, `tex/`).
+- **Coverage is held at 100%** (statements/branches/functions/lines — `vitest.config.ts` thresholds; only `src/types.ts` and test files are excluded). New code must ship with tests that fully cover it or `npm run coverage` (and CI) fails.
+- **Test files run serially** (`fileParallelism: false` in `vitest.config.ts`): many files spawn real child processes and running them concurrently exhausts posix_spawn on macOS ("spawn Unknown system error -88"). Don't re-enable file parallelism.
 - **Imports**: sorted alphabetically by Biome (enforced via lint)
 - **Formatting**: 2-space indent, single quotes, trailing commas (Biome enforced)
 - **No hardcoded limits/URLs**: if you're tempted to add a constant that bounds request size, timeout, concurrency, or endpoint URL, make it a `CompileOptions`/`PlatexClientConfig`/`CreateAppConfig` field with an env-var fallback and a documented default instead (see `resolveLimits`, `defaultServiceUrl`, `defaultApiKey` in `defaults.ts` for the pattern)
@@ -100,15 +113,20 @@ These are deliberate and load-bearing — don't regress them:
 - **Engine probes are memoized.** `isCommandAvailable` caches *positive* `which`/`where` results (as the in-flight promise, deduping concurrent probes) so warm servers and `--watch` loops don't spawn a lookup subprocess per compile; negative results are never cached so a newly installed engine is picked up on the next compile — don't cache negatives. `clearCommandAvailabilityCache()` resets it (tests, PATH mutation). `resolveTectonicBinary` checks the staged `/tmp` binary before probing PATH, so warm serverless invocations resolve with zero subprocesses.
 - **Rerun-pass error dedup is Set-based** (`passes.ts`) — O(1) per candidate instead of rescanning `allErrors`, which went quadratic on documents repeating one error hundreds of times.
 - **Spawned engines get `stdio: ['ignore', 'pipe', 'pipe']`** — no stdin pipe allocation, and a TeX engine that tries to prompt reads EOF immediately instead of blocking until the timeout kills it.
-- **`utf8ByteLength` uses `Buffer.byteLength`** (allocation-free) with a `typeof Buffer` guard falling back to `TextEncoder` on edge runtimes — ~3.6× faster than `TextEncoder().encode().length` on multi-MB sources, which is the source-limit hot path. The `typeof` guard keeps `defaults.ts` edge-safe; don't turn it into a bare `Buffer` reference.
+- **`utf8ByteLength` uses `Buffer.byteLength`** (allocation-free) with a `_Buffer` constant (initialized via a try/catch IIFE at module scope) falling back to `TextEncoder` on edge runtimes — ~3.6× faster than `TextEncoder().encode().length` on multi-MB sources, which is the source-limit hot path. The IIFE pattern prevents the minifier from constant-folding the `typeof Buffer` check and eliminating the edge fallback (which previously happened: the minifier inlined small functions and dropped the else branch, leaving bare `Buffer.from(…)` in `dist/client.js`). `bytesToBase64` and `base64ToBytes` use the same `_Buffer` constant. CI verifies the edge bundle has no bare `Buffer.` references.
 - **Bundles are minified and side-effect-free** (`tsup.config.ts` `minify` + `treeshake`; `"sideEffects": false` in package.json lets consumer bundlers tree-shake unused exports), roughly halving shipped size; sourcemaps are still emitted. The edge `platex/client` bundle stays free of `node:` built-ins (verified by the grep check after build). Keep entry modules free of import-time side effects or `sideEffects: false` becomes a lie.
+
+## CI / Release
+
+- `.github/workflows/ci.yml` (push/PR to main, Node 20 + 22): typecheck → lint → download Tectonic → test → build → grep check that `dist/client.*` has no `node:` imports → end-to-end CLI smoke test (compiles a real PDF). Anything that breaks one of those steps breaks CI even if it works locally.
+- `.github/workflows/release.yml`: publishes to npm with provenance on `v*` tags (`prepublishOnly` re-runs typecheck + tests + build).
 
 ## Security notes
 
 - Path traversal in filenames is rejected (both in HTTP route and library)
 - Child processes run with minimal env (PATH, HOME, TMPDIR only)
 - TeX write/open restrictions enforced via `openout_any=p`, `openin_any=a`
-- Source/files limits (`CompileLimits`: `maxSourceBytes` 5MB, `maxFilesCount` 50, `maxTotalFilesBytes` 25MB by default) are enforced in both the HTTP route and `runLocalPipeline` itself, but are *configurable* — per-call via `CompileOptions.limits`, per-client via `createPlatexClient({ limits })`, per-deployment via `createApp({ limits })`. A remote caller's own `limits` option is a client-side pre-check only; it can never raise what the server actually enforces (the server's `limits` config is what's authoritative) — don't change that invariant without discussing it, it's load-bearing for the "server operator controls server resources" security model.
+- Source/files limits (`CompileLimits`: `maxSourceBytes` 5MB, `maxFilesCount` 50, `maxTotalFilesBytes` 25MB by default) are enforced in both the HTTP route and `runLocalPipeline` itself, but are *configurable* — per-call via `CompileOptions.limits`, per-client via `createPlatexClient({ limits })`, per-deployment via `createApp({ limits })`. Each field also falls back to an env var (`PLATEX_MAX_SOURCE_BYTES`, `PLATEX_MAX_FILES_COUNT`, `PLATEX_MAX_TOTAL_FILES_BYTES`) when unset, matching the convention used by `PLATEX_API_KEY` / `PLATEX_MAX_CONCURRENT`. A remote caller's own `limits` option is a client-side pre-check only; it can never raise what the server actually enforces (the server's `limits` config is what's authoritative) — don't change that invariant without discussing it, it's load-bearing for the "server operator controls server resources" security model.
 - `timeout` is enforced as an overall wall-clock budget for the *whole* pipeline (`src/local/passes.ts` tracks a deadline and gives each subprocess only the remaining time), capped at 120s by the HTTP schema — not a per-process allowance, so total server-side time per request is actually bounded by the documented cap
 - The HTTP server has no auth by default (`apiKey` config / `PLATEX_API_KEY` env var opts into bearer-token auth on `/compile`) and caps concurrent compiles per instance (`maxConcurrentCompiles` config / `PLATEX_MAX_CONCURRENT` env var, default 4) plus overall request body size (~45MB, auto-derived from `limits` or overridable via `maxRequestBodyBytes`) — see README's "Server configuration" section. `createCompileRoute()`/`createApp()` are factories (not module-level singletons), so each instance gets its own concurrency counter — don't reintroduce module-level mutable state there.
 - `CompileOptions.signal` (`AbortSignal`) cancels in-flight local subprocesses or the remote HTTP request; the server also wires the incoming request's own abort signal through so a disconnected client doesn't leave orphaned compiles running
