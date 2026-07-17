@@ -20,6 +20,9 @@ npm run lint:fix     # biome check --write src/ — auto-fix
 npm run format       # biome format --write src/
 npm run build        # tsup — produces dist/{index,client,server-app}.{js,cjs,d.ts} + dist/cli.js (the `platex` bin)
 npm run build:server # tsup --config tsup.server.config.ts — bundled dist/server.cjs for the Docker image (separate from dist/server-app.* above — don't confuse the two)
+npm run build:vercel # download-tectonic.mjs (SHA256-pinned) + build:server — the Docker/Vercel image build that bundles the Tectonic binary
+npm run dev          # tsx src/server/index.ts — run the standalone HTTP server locally
+npm run test:watch   # vitest (watch mode); vitest run <file> for a single test file
 ```
 
 ## Architecture
@@ -45,6 +48,7 @@ src/
     bibtex.ts                # runBibliography, detectBibliography
     log-parser.ts            # parseLog, needsRerun — TeX log parsing
     tectonic.ts               # resolveTectonicBinary, runTectonic — Tectonic engine support
+    utils.ts                  # validateFilename/isFilenameValid (path-traversal defense) + shared engine/PATH resolution
   remote/
     client.ts               # callRemote — HTTP client for the platex service (auth, retry, abort)
   server/
