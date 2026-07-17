@@ -1,4 +1,11 @@
-import { DEFAULT_BIB, DEFAULT_ENGINE, DEFAULT_PASSES, DEFAULT_TIMEOUT } from '../defaults.js';
+import {
+  DEFAULT_BIB,
+  DEFAULT_ENGINE,
+  DEFAULT_PASSES,
+  DEFAULT_TIMEOUT,
+  defaultApiKey,
+  defaultServiceUrl,
+} from '../defaults.js';
 import type { CompileOptions, CompileRequest, CompileResponse, CompileResult } from '../types.js';
 
 function isValidServiceUrl(url: string): boolean {
@@ -10,13 +17,28 @@ function isValidServiceUrl(url: string): boolean {
   }
 }
 
-export async function callRemote(source: string, options: CompileOptions): Promise<CompileResult> {
-  const serviceUrl = options.serviceUrl as string;
-  const timeout = options.timeout ?? DEFAULT_TIMEOUT;
-
-  if (!isValidServiceUrl(serviceUrl)) {
-    throw new TypeError('platex: serviceUrl must be an http or https URL');
+/** Internal — carries whether a failure is worth retrying without callers needing to parse messages. */
+class RemoteCompileError extends Error {
+  readonly retryable: boolean;
+  constructor(message: string, retryable: boolean) {
+    super(message);
+    this.name = 'RemoteCompileError';
+    this.retryable = retryable;
   }
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function callRemoteOnce(
+  source: string,
+  options: CompileOptions,
+  serviceUrl: string,
+): Promise<CompileResult> {
+  const timeout = options.timeout ?? DEFAULT_TIMEOUT;
+  const fetchImpl = options.fetch ?? fetch;
+  const apiKey = options.apiKey ?? defaultApiKey();
 
   const body: CompileRequest = {
     source,
@@ -29,9 +51,19 @@ export async function callRemote(source: string, options: CompileOptions): Promi
     ),
   };
 
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...options.headers,
+  };
+  if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+
   const controller = new AbortController();
+  let timedOutByUs = false;
   // Give slightly more time than the compilation timeout for network overhead
-  const networkTimeout = setTimeout(() => controller.abort(), timeout + 10_000);
+  const networkTimeout = setTimeout(() => {
+    timedOutByUs = true;
+    controller.abort();
+  }, timeout + 10_000);
   // Let a caller-supplied signal cancel the request early too.
   const onCallerAbort = () => controller.abort();
   if (options.signal?.aborted) controller.abort();
@@ -39,14 +71,17 @@ export async function callRemote(source: string, options: CompileOptions): Promi
 
   let response: Response;
   try {
-    response = await fetch(`${serviceUrl}/compile`, {
+    response = await fetchImpl(`${serviceUrl}/compile`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(body),
       signal: controller.signal,
     });
   } catch {
-    throw new Error('platex: failed to reach service');
+    // A timeout we imposed, or a genuine network failure, is worth retrying;
+    // the caller explicitly cancelling is not.
+    const callerAborted = Boolean(options.signal?.aborted) && !timedOutByUs;
+    throw new RemoteCompileError('platex: failed to reach service', !callerAborted);
   } finally {
     clearTimeout(networkTimeout);
     options.signal?.removeEventListener('abort', onCallerAbort);
@@ -54,7 +89,12 @@ export async function callRemote(source: string, options: CompileOptions): Promi
 
   if (!response.ok) {
     const text = await response.text().catch(() => '');
-    throw new Error(`platex: service returned ${response.status}: ${text}`);
+    // 4xx means the request itself is bad — retrying won't help. 5xx often
+    // means a cold-starting backend, which retrying can genuinely fix.
+    throw new RemoteCompileError(
+      `platex: service returned ${response.status}: ${text}`,
+      response.status >= 500,
+    );
   }
 
   const data: CompileResponse = (await response.json()) as CompileResponse;
@@ -65,4 +105,26 @@ export async function callRemote(source: string, options: CompileOptions): Promi
     warnings: data.warnings,
     logs: data.logs,
   };
+}
+
+export async function callRemote(source: string, options: CompileOptions): Promise<CompileResult> {
+  const serviceUrl = options.serviceUrl ?? defaultServiceUrl();
+  if (!serviceUrl || !isValidServiceUrl(serviceUrl)) {
+    throw new TypeError(
+      'platex: serviceUrl must be an http or https URL (pass it explicitly, or set PLATEX_SERVICE_URL)',
+    );
+  }
+
+  const maxAttempts = Math.max(1, (options.retry ?? 0) + 1);
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await callRemoteOnce(source, options, serviceUrl);
+    } catch (err) {
+      const retryable = err instanceof RemoteCompileError && err.retryable;
+      if (!retryable || attempt === maxAttempts) throw err;
+      await delay(300 * attempt);
+    }
+  }
+  /* istanbul ignore next -- loop always returns or throws above */
+  throw new Error('platex: failed to reach service');
 }
