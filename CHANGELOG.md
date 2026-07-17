@@ -6,6 +6,21 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.0.7] — 2026-07-17
+
+### Changed
+
+- Expanded the `docs/` site into comprehensive, framework-agnostic
+  documentation: new guides (how it works, compiling, files & bibliography,
+  cancellation/retries/timeouts, request handlers, and CLI & watch mode),
+  framework recipes and an edge/serverless page, deployment pages (service,
+  Docker, server configuration), and dedicated CLI and HTTP API references.
+
+### Internal
+
+- Test suite reaches 100% coverage with meaningful tests, and enforces the
+  threshold in CI.
+
 ## [0.0.6] — 2026-07-17
 
 ### Added
