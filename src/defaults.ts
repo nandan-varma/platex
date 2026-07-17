@@ -41,7 +41,18 @@ export function defaultApiKey(): string | undefined {
   return readEnv('PLATEX_API_KEY');
 }
 
-/** UTF-8 byte length of a string via the Web-standard `TextEncoder` — works in Node, edge, and browser runtimes alike. */
+/**
+ * UTF-8 byte length of a string. Uses Node's `Buffer.byteLength` when available
+ * — it computes the length without allocating an encoded copy, which matters
+ * for multi-MB sources — and falls back to the Web-standard `TextEncoder` on
+ * edge/browser runtimes where `Buffer` may be absent.
+ */
 export function utf8ByteLength(str: string): number {
-  return new TextEncoder().encode(str).length;
+  // Buffer.byteLength avoids allocating an encoded copy (matters for MB-scale
+  // sources); TextEncoder is the edge/browser fallback where Buffer is absent.
+  /* v8 ignore start -- runtime-env branch: Node/vitest always takes the Buffer fast path */
+  return typeof Buffer !== 'undefined'
+    ? Buffer.byteLength(str, 'utf8')
+    : new TextEncoder().encode(str).length;
+  /* v8 ignore stop */
 }

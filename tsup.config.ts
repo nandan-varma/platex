@@ -17,6 +17,10 @@ export default defineConfig([
     splitting: false,
     sourcemap: true,
     clean: true,
+    // Minify the shipped bundles (smaller install + edge payload); sourcemaps
+    // are emitted so consumers can still debug into the original source.
+    minify: true,
+    treeshake: true,
     external: ['hono', '@hono/node-server', '@hono/zod-validator', 'zod'],
   },
   {
@@ -29,6 +33,8 @@ export default defineConfig([
     splitting: false,
     sourcemap: true,
     clean: false,
+    minify: true,
+    treeshake: true,
     external: ['hono', '@hono/node-server', '@hono/zod-validator', 'zod'],
   },
 ]);

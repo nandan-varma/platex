@@ -91,6 +91,15 @@ When adding a new top-level export, decide which entry point(s) it belongs in an
 - `src/local/compiler.ts` — child process spawning with env isolation, timeout, and AbortSignal support
 - `src/local/log-parser.ts` — TeX log parsing for errors/warnings
 
+## Performance
+
+These are deliberate and load-bearing — don't regress them:
+
+- **Independent I/O runs in parallel.** `runLocalPipeline` writes `main.tex` + all attachments with `Promise.all` and overlaps the engine-availability probe (`which`/`where`) with those writes; the CLI's `collectFiles` reads every attachment in parallel. The multi-pass TeX compilation itself is *inherently sequential* (each pass consumes the previous pass's `.aux`/`.toc`), so don't try to parallelize passes — parallelize the I/O around them.
+- **Log parsing is single-pass.** `parseLatexLog` tracks the file-scope stack inline while detecting errors/warnings (no per-line `Map`, no second scan). `matchWarning` bails via a cheap `includes('Warning')`/`includes('full \\')` pre-filter before running the ~10 warning regexes — ~6× faster on realistic logs where most lines are neither. Keep new warning patterns covered by that pre-filter (or widen it).
+- **`utf8ByteLength` uses `Buffer.byteLength`** (allocation-free) with a `typeof Buffer` guard falling back to `TextEncoder` on edge runtimes — ~3.6× faster than `TextEncoder().encode().length` on multi-MB sources, which is the source-limit hot path. The `typeof` guard keeps `defaults.ts` edge-safe; don't turn it into a bare `Buffer` reference.
+- **Bundles are minified** (`tsup.config.ts` `minify` + `treeshake`), roughly halving shipped size; sourcemaps are still emitted. The edge `platex/client` bundle stays free of `node:` built-ins (verified by the grep check after build).
+
 ## Security notes
 
 - Path traversal in filenames is rejected (both in HTTP route and library)

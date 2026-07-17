@@ -8,48 +8,20 @@ function unwrapLines(log: string): string {
   return log.replace(/(.{79})\n(?!\n)/g, '$1');
 }
 
-/**
- * Track which .tex/.sty/.cls file TeX is currently processing.
- * TeX prints "(./foo.tex" when entering and ")" when leaving a file.
- * We maintain a stack and return the topmost file at any point.
- */
-function buildFileStack(log: string): Map<number, string | null> {
-  const lineFiles = new Map<number, string | null>();
-  const stack: string[] = [];
-  const lines = log.split('\n');
-
-  const FILE_OPEN = /\(((?:\.\.?\/)[^\s)]+\.(tex|sty|cls|def|cfg|fd|bbl))/g;
-
-  for (let i = 0; i < lines.length; i++) {
-    /* v8 ignore next -- `?? ''` fallback is unreachable: i is always in-bounds (noUncheckedIndexedAccess) */
-    const line = lines[i] ?? '';
-
-    FILE_OPEN.lastIndex = 0;
-    const lineOpens: RegExpExecArray[] = [];
-    let match = FILE_OPEN.exec(line);
-    while (match !== null) {
-      lineOpens.push(match);
-      match = FILE_OPEN.exec(line);
-    }
-
-    // Push opens onto the stack
-    for (const m of lineOpens) {
-      stack.push(m[1] as string);
-    }
-
-    lineFiles.set(i, stack[stack.length - 1] ?? null);
-
-    // Pop: only the last N closing parens on this line close files opened on
-    // this line; earlier closing parens belong to TeX expressions, not files.
-    const lineCloses = line.split(')').length - 1;
-    const pops = Math.min(lineCloses, lineOpens.length);
-    for (let p = 0; p < pops; p++) {
-      stack.pop();
-    }
-  }
-
-  return lineFiles;
+/** Count occurrences of a single character without allocating (unlike `split`). */
+function countChar(str: string, ch: string): number {
+  let n = 0;
+  for (let i = str.indexOf(ch); i !== -1; i = str.indexOf(ch, i + 1)) n++;
+  return n;
 }
+
+/**
+ * TeX prints "(./foo.tex" when entering and ")" when leaving a file. We track
+ * the enter/leave stack for the *current* line only — the file a given line
+ * belongs to — rather than materializing a Map for every line. `FILE_OPEN` is
+ * module-scoped and reset per call so it isn't reallocated on every line.
+ */
+const FILE_OPEN = /\(((?:\.\.?\/)[^\s)]+\.(tex|sty|cls|def|cfg|fd|bbl))/g;
 
 export function parseLog(
   log: string,
@@ -64,16 +36,33 @@ export function parseLog(
 }
 
 function parseLatexLog(log: string): { errors: LatexError[]; warnings: LatexWarning[] } {
-  const unwrapped = unwrapLines(log);
-  const lines = unwrapped.split('\n');
-  const fileStack = buildFileStack(unwrapped);
+  const lines = unwrapLines(log).split('\n');
 
   const errors: LatexError[] = [];
   const warnings: LatexWarning[] = [];
 
+  // Single pass: track the file stack inline (no per-line Map) while detecting
+  // errors/warnings, so we scan the log — often thousands of lines — exactly
+  // once instead of twice.
+  const stack: string[] = [];
+
   for (let i = 0; i < lines.length; i++) {
     /* v8 ignore next -- `?? ''` fallback is unreachable: i is always in-bounds (noUncheckedIndexedAccess) */
     const line = lines[i] ?? '';
+
+    // Push files opened on this line. The regex only ever matches after a '(',
+    // so skip it entirely on the many lines that contain none.
+    let opens = 0;
+    if (line.includes('(')) {
+      FILE_OPEN.lastIndex = 0;
+      let open = FILE_OPEN.exec(line);
+      while (open !== null) {
+        stack.push(open[1] as string);
+        opens++;
+        open = FILE_OPEN.exec(line);
+      }
+    }
+    const currentFile = stack[stack.length - 1] ?? null;
 
     // --- Errors (lines starting with "!") ---
     if (line.startsWith('! ')) {
@@ -96,19 +85,29 @@ function parseLatexLog(log: string): { errors: LatexError[]; warnings: LatexWarn
 
       errors.push({
         type: 'error',
-        file: fileStack.get(i) ?? null,
+        file: currentFile,
         line: lineNumber,
         message,
         context,
         source: 'latex',
       });
-      continue;
+    } else {
+      // --- Warnings ---
+      const warning = matchWarning(line, currentFile);
+      if (warning) {
+        warnings.push(warning);
+      }
     }
 
-    // --- Warnings ---
-    const warning = matchWarning(line, fileStack.get(i) ?? null);
-    if (warning) {
-      warnings.push(warning);
+    // Pop files closed on this line. Closes are capped at the number of opens
+    // on this line (earlier ')' belong to TeX expressions, not file scopes), so
+    // when this line opened nothing there's nothing to pop — and we skip the
+    // per-line ')' scan on the vast majority of lines.
+    if (opens > 0) {
+      const closes = Math.min(countChar(line, ')'), opens);
+      for (let p = 0; p < closes; p++) {
+        stack.pop();
+      }
     }
   }
 
@@ -169,6 +168,11 @@ const WARNING_PATTERNS: WarningPattern[] = [
 ];
 
 function matchWarning(line: string, file: string | null): LatexWarning | null {
+  // Every pattern requires either "Warning" or an "…full \hbox/\vbox" fragment.
+  // Bail before running ~10 regexes on the many lines that are neither — the
+  // common case in a multi-thousand-line log.
+  if (!line.includes('Warning') && !line.includes('full \\')) return null;
+
   for (const pattern of WARNING_PATTERNS) {
     const match = line.match(pattern.re);
     if (match) {

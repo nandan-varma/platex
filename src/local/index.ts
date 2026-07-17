@@ -35,25 +35,36 @@ export async function runLocalPipeline(
     throw new TypeError(`platex: total files size exceeds ${limits.maxTotalFilesBytes} bytes`);
   }
 
+  // Validate every filename up front (cheap, fail-fast) so a path-traversal
+  // attempt is rejected before we even create a temp dir or touch disk.
+  for (const [filename] of fileEntries) {
+    validateFilename(filename);
+  }
+
   const tmpDir = await mkdtemp(join(tmpdir(), 'platex-'));
 
   try {
-    // Write main.tex
-    await writeFile(join(tmpDir, 'main.tex'), source, 'utf-8');
-
-    // Write additional files, creating subdirectories as needed
-    for (const [filename, content] of fileEntries) {
-      validateFilename(filename);
-      const dest = join(tmpDir, filename);
-      const dir = dirname(dest);
-      if (dir !== tmpDir) {
-        await mkdir(dir, { recursive: true });
-      }
-      await writeFile(dest, content);
+    // Deduplicate the subdirectories the attachments need, so we issue one
+    // mkdir per unique dir rather than one per file.
+    const subDirs = new Set<string>();
+    for (const [filename] of fileEntries) {
+      const dir = dirname(join(tmpDir, filename));
+      if (dir !== tmpDir) subDirs.add(dir);
     }
 
-    // Engine selection: prefer system TeX Live; fall back to bundled Tectonic
-    const engineAvailable = await isEngineAvailable(engine);
+    // Overlap the engine-availability probe (a `which`/`where` subprocess) with
+    // staging the working directory — they're independent — and write main.tex
+    // plus every attachment in parallel instead of one blocking await each.
+    const [engineAvailable] = await Promise.all([
+      isEngineAvailable(engine),
+      (async () => {
+        await Promise.all([...subDirs].map((dir) => mkdir(dir, { recursive: true })));
+        await Promise.all([
+          writeFile(join(tmpDir, 'main.tex'), source, 'utf-8'),
+          ...fileEntries.map(([filename, content]) => writeFile(join(tmpDir, filename), content)),
+        ]);
+      })(),
+    ]);
 
     if (engineAvailable) {
       // Full TeX Live path — multi-pass with bibtex support

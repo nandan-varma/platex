@@ -151,6 +151,13 @@ describe('parseLog - LaTeX warnings', () => {
     const { errors } = parseLog(UNDEFINED_REF_LOG);
     expect(errors).toHaveLength(0);
   });
+
+  it('does not treat a line that merely contains "Warning" as a warning', () => {
+    // Passes the cheap pre-filter (contains "Warning") but matches none of the
+    // structured warning patterns, so it must fall through to no match.
+    const { warnings } = parseLog('(./main.tex\nThis paragraph mentions a Warning informally.\n)');
+    expect(warnings).toHaveLength(0);
+  });
 });
 
 describe('needsRerun', () => {

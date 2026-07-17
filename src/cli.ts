@@ -386,13 +386,11 @@ async function collectFiles(
   inputPath: string | null,
   cwd: string,
 ): Promise<CollectedFiles> {
-  const files: Record<string, Buffer> = {};
-  const paths: string[] = [];
-
-  const attach = async (absPath: string, key: string): Promise<void> => {
-    if (absPath === inputPath) return;
-    files[key] = await readFile(absPath);
-    paths.push(absPath);
+  // First resolve the full attachment list via a cheap metadata walk, then
+  // read every file's bytes in parallel rather than one blocking read at a time.
+  const targets: Array<{ abs: string; key: string }> = [];
+  const add = (absPath: string, key: string): void => {
+    if (absPath !== inputPath) targets.push({ abs: absPath, key });
   };
 
   for (const filePath of filePaths) {
@@ -402,14 +400,23 @@ async function collectFiles(
       for (const entry of await readdir(abs, { recursive: true, withFileTypes: true })) {
         if (!entry.isFile()) continue;
         const entryAbs = resolve(entry.parentPath, entry.name);
-        await attach(entryAbs, toPosix(relative(abs, entryAbs)));
+        add(entryAbs, toPosix(relative(abs, entryAbs)));
       }
     } else {
       const rel = relative(inputDir, abs);
       const key = rel.startsWith('..') || isAbsolute(rel) ? basename(abs) : toPosix(rel);
-      await attach(abs, key);
+      add(abs, key);
     }
   }
+
+  const files: Record<string, Buffer> = {};
+  const paths: string[] = [];
+  await Promise.all(
+    targets.map(async ({ abs, key }) => {
+      files[key] = await readFile(abs);
+      paths.push(abs);
+    }),
+  );
 
   return { files, paths };
 }
