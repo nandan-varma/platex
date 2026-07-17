@@ -23,7 +23,10 @@ npm run build:server # tsup --config tsup.server.config.ts — bundled dist/serv
 npm run build:vercel # download-tectonic.mjs (SHA256-pinned) + build:server — the Docker/Vercel image build that bundles the Tectonic binary
 npm run dev          # tsx src/server/index.ts — run the standalone HTTP server locally
 npm run test:watch   # vitest (watch mode); vitest run <file> for a single test file
+npm run coverage     # vitest run --coverage — thresholds are 100% (see "Tests" below)
 ```
+
+Tests compile real LaTeX via a bundled Tectonic binary at `bin/tectonic` (gitignored). If Tectonic-dependent tests fail with a missing binary, stage it first: `node scripts/download-tectonic.mjs` (SHA256-pinned download).
 
 ## Architecture
 
@@ -57,6 +60,14 @@ src/
     routes/compile.ts        # createCompileRoute(config?) — POST /compile factory with Zod validation
 ```
 
+Beyond `src/`:
+- `api/index.ts` — Vercel function entry: wraps `createApp()` with `hono/vercel` (with `bodyParser: false`)
+- `docker/` — Dockerfile + docker-compose for the standalone HTTP service (consumes `dist/server.cjs` from `build:server`)
+- `docs/` — standalone Astro docs site with its own `package.json`; not part of the npm package
+- `examples/` — sample `.tex` inputs, assets, and a Next.js demo
+- `test/fixtures/` — fake TeX engines, captured logs, and `.tex` sources used by the tests
+- `bin/tectonic` — gitignored staged Tectonic binary (see download note under Build / Test / Lint)
+
 Why so many small files at the top level instead of one `index.ts`: `client-core.ts`/`request-handler-core.ts` contain the actual logic (option merging, retry-free glue, Request/Response shaping) and are edge-safe (no Node built-ins) — each entry point (`index.ts`, `client-entry.ts`) supplies its own `compile` implementation into that shared core rather than duplicating the logic. Don't merge these back into one file; that's what makes `platex/client` genuinely edge-safe rather than just "doesn't happen to use `fs` today."
 
 ## Entry points
@@ -77,7 +88,9 @@ When adding a new top-level export, decide which entry point(s) it belongs in an
 - **ESM-first** (`"type": "module"` in package.json), uses `.js` extensions in imports
 - **Naming**: `camelCase` for functions/variables, `PascalCase` for types/interfaces, `kebab-case` for files
 - **Error handling**: throw `TypeError` for invalid inputs, return structured error objects for compilation failures
-- **Tests**: colocated with source (`*.test.ts`), use `describe`/`it`/`expect` from vitest, real child processes/real HTTP for integration tests — mock `fetch` only for the remote-client-layer tests (option merging, headers, retry), not for anything that could instead spawn the real fake-engine fixtures or bundled Tectonic
+- **Tests**: colocated with source (`*.test.ts`), use `describe`/`it`/`expect` from vitest, real child processes/real HTTP for integration tests — mock `fetch` only for the remote-client-layer tests (option merging, headers, retry), not for anything that could instead spawn the real fake-engine fixtures or bundled Tectonic. Shared fixtures live in `test/fixtures/` (`fake-engines/`, `logs/`, `tex/`).
+- **Coverage is held at 100%** (statements/branches/functions/lines — `vitest.config.ts` thresholds; only `src/types.ts` and test files are excluded). New code must ship with tests that fully cover it or `npm run coverage` (and CI) fails.
+- **Test files run serially** (`fileParallelism: false` in `vitest.config.ts`): many files spawn real child processes and running them concurrently exhausts posix_spawn on macOS ("spawn Unknown system error -88"). Don't re-enable file parallelism.
 - **Imports**: sorted alphabetically by Biome (enforced via lint)
 - **Formatting**: 2-space indent, single quotes, trailing commas (Biome enforced)
 - **No hardcoded limits/URLs**: if you're tempted to add a constant that bounds request size, timeout, concurrency, or endpoint URL, make it a `CompileOptions`/`PlatexClientConfig`/`CreateAppConfig` field with an env-var fallback and a documented default instead (see `resolveLimits`, `defaultServiceUrl`, `defaultApiKey` in `defaults.ts` for the pattern)
@@ -102,6 +115,11 @@ These are deliberate and load-bearing — don't regress them:
 - **Spawned engines get `stdio: ['ignore', 'pipe', 'pipe']`** — no stdin pipe allocation, and a TeX engine that tries to prompt reads EOF immediately instead of blocking until the timeout kills it.
 - **`utf8ByteLength` uses `Buffer.byteLength`** (allocation-free) with a `typeof Buffer` guard falling back to `TextEncoder` on edge runtimes — ~3.6× faster than `TextEncoder().encode().length` on multi-MB sources, which is the source-limit hot path. The `typeof` guard keeps `defaults.ts` edge-safe; don't turn it into a bare `Buffer` reference.
 - **Bundles are minified and side-effect-free** (`tsup.config.ts` `minify` + `treeshake`; `"sideEffects": false` in package.json lets consumer bundlers tree-shake unused exports), roughly halving shipped size; sourcemaps are still emitted. The edge `platex/client` bundle stays free of `node:` built-ins (verified by the grep check after build). Keep entry modules free of import-time side effects or `sideEffects: false` becomes a lie.
+
+## CI / Release
+
+- `.github/workflows/ci.yml` (push/PR to main, Node 20 + 22): typecheck → lint → download Tectonic → test → build → grep check that `dist/client.*` has no `node:` imports → end-to-end CLI smoke test (compiles a real PDF). Anything that breaks one of those steps breaks CI even if it works locally.
+- `.github/workflows/release.yml`: publishes to npm with provenance on `v*` tags (`prepublishOnly` re-runs typecheck + tests + build).
 
 ## Security notes
 
