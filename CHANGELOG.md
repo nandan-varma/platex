@@ -6,6 +6,23 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.0.6] — 2026-07-17
+
+### Added
+
+- Standalone Astro + Starlight documentation site under `docs/` — all
+  Markdown, ready to deploy to Vercel.
+
+### Removed
+
+- The in-repo Next.js docs/demo application (`examples/nextjs-demo`); its
+  content now lives in the new `docs/` site.
+
+### Changed
+
+- Reworded the README and reference docs to describe output accuracy without
+  Overleaf comparisons.
+
 ## [0.0.5] — 2026-07-17
 
 ### Added
@@ -73,7 +90,8 @@ project adheres to [Semantic Versioning](https://semver.org/).
   target, CI/release workflows, end-to-end test suite, and a Next.js
   docs/demo site.
 
-[Unreleased]: https://github.com/nandan-varma/platex/compare/v0.0.5...HEAD
+[Unreleased]: https://github.com/nandan-varma/platex/compare/v0.0.6...HEAD
+[0.0.6]: https://github.com/nandan-varma/platex/compare/v0.0.5...v0.0.6
 [0.0.5]: https://github.com/nandan-varma/platex/compare/v0.0.4...v0.0.5
 [0.0.4]: https://github.com/nandan-varma/platex/compare/v0.0.3...v0.0.4
 [0.0.3]: https://github.com/nandan-varma/platex/compare/v0.0.2...v0.0.3
