@@ -39,3 +39,19 @@ jobs:
       - run: npm test
 
       - run: npm run build
+
+      # `platex/client` must stay edge-safe: the built bundle may never pull
+      # in a Node built-in (see tsup.config.ts and CONTRIBUTING.md).
+      - name: Verify edge bundle has no node: imports
+        run: |
+          if grep -nE "[\"']node:" dist/client.js dist/client.cjs; then
+            echo "::error::dist/client.* imports Node built-ins — platex/client must stay edge-safe"
+            exit 1
+          fi
+
+      # Smoke-test the built CLI end-to-end (real Tectonic compile).
+      - name: Smoke-test CLI
+        run: |
+          printf '\\documentclass{article}\\begin{document}CI smoke test\\end{document}\n' > /tmp/smoke.tex
+          node dist/cli.js /tmp/smoke.tex -o /tmp/smoke.pdf
+          head -c 5 /tmp/smoke.pdf | grep -q '%PDF-'

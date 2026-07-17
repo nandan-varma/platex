@@ -1,6 +1,7 @@
 # platex
 
 [![npm version](https://img.shields.io/npm/v/@nandan-varma/platex.svg)](https://www.npmjs.com/package/@nandan-varma/platex)
+[![CI](https://github.com/nandan-varma/platex/actions/workflows/ci.yml/badge.svg)](https://github.com/nandan-varma/platex/actions/workflows/ci.yml)
 [![license](https://img.shields.io/npm/l/@nandan-varma/platex.svg)](LICENSE)
 
 Compile LaTeX to PDF in TypeScript, with output as close to Overleaf as possible. Works in any framework that speaks the Fetch API — Next.js, TanStack Start, Astro, SvelteKit, Remix, Bun, Deno, Cloudflare Workers — on Node.js or the edge.
@@ -41,6 +42,14 @@ export const POST = handleCompileRequest
 ```
 
 That's it — zero config needed if `PLATEX_SERVICE_URL` (and, if you've enabled auth, `PLATEX_API_KEY`) are set as environment variables. Every option below is optional; nothing is hardcoded.
+
+Prefer the terminal? The same pipeline ships as a CLI:
+
+```bash
+npx @nandan-varma/platex main.tex          # → main.pdf, no TeX installation required
+```
+
+See **[CLI](#cli)** below for watch mode, extra files, remote compilation, and JSON output.
 
 ## Examples & demo
 
@@ -240,6 +249,40 @@ const result = platex.compile(source, { signal: controller.signal })
 // ...later
 controller.abort()
 ```
+
+---
+
+## CLI
+
+The package ships a `platex` binary — the exact same compile pipeline as the library (local TeX Live → bundled Tectonic fallback → or remote service), driveable from any shell or script:
+
+```bash
+npx @nandan-varma/platex main.tex                 # → main.pdf next to the input
+platex main.tex -o out/paper.pdf                  # custom output path (dirs created)
+platex main.tex -w                                # watch mode: recompile on save
+platex main.tex -f refs.bib -f figures/           # attach files or whole directories
+platex main.tex -e xelatex -p 3 -b biber          # engine / passes / bibliography
+platex main.tex -s https://platex.example.com     # compile via a remote service
+echo '\documentclass{article}...' | platex -      # read source from stdin
+platex main.tex --json | jq '.errors'             # full CompileResult as JSON
+```
+
+| Flag | Description |
+|---|---|
+| `-o, --output <path>` | Output PDF path (default: input path with `.pdf`) |
+| `-e, --engine <name>` | `pdflatex` \| `xelatex` \| `lualatex` \| `tectonic` |
+| `-p, --passes <n>` | `auto` \| `1` \| `2` \| `3` |
+| `-b, --bib <name>` | `bibtex` \| `biber` \| `none` |
+| `-f, --file <path>` | Attach an extra file or directory (repeatable). Files are keyed relative to the input's directory; directories are walked recursively |
+| `-t, --timeout <ms>` | Overall wall-clock budget for the whole pipeline |
+| `-s, --service-url <url>` | Compile remotely (default: `PLATEX_SERVICE_URL` env var) |
+| `--api-key <key>` | Bearer token for the service (default: `PLATEX_API_KEY` env var) |
+| `--retry <n>` | Extra attempts on retryable remote failures |
+| `-w, --watch` | Recompile whenever the input or attached files change |
+| `--json` | Print the full `CompileResult` as JSON on stdout (`pdf` base64-encoded); writes the PDF file only if `-o` is given |
+| `-q, --quiet` | Only print errors |
+
+Exit codes: `0` success, `1` compile failed (errors are printed with `file:line` locations), `2` usage or environment error. Ctrl-C aborts the in-flight compile cleanly — no orphaned TeX processes.
 
 ---
 
@@ -496,3 +539,9 @@ When running with system TeX Live (Docker/self-hosted):
 - Same Docker base image: `texlive/texlive:latest` (official TeX Users Group image, full TeX Live)
 
 When running on Vercel with Tectonic, output is XeTeX-based. Nearly identical for most documents; minor differences possible in documents that rely on pdflatex-specific font metrics.
+
+---
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow and [CHANGELOG.md](CHANGELOG.md) for release history. Issues and PRs welcome.

@@ -14,11 +14,11 @@ Three package entry points (see "Entry points" below) — `platex` (Node, full),
 
 ```bash
 npm run typecheck    # tsc --noEmit — must pass
-npm test             # vitest run — 158 tests, all must pass
+npm test             # vitest run — all tests must pass
 npm run lint         # biome check src/ — must pass
 npm run lint:fix     # biome check --write src/ — auto-fix
 npm run format       # biome format --write src/
-npm run build        # tsup — produces dist/{index,client,server-app}.{js,cjs,d.ts}
+npm run build        # tsup — produces dist/{index,client,server-app}.{js,cjs,d.ts} + dist/cli.js (the `platex` bin)
 npm run build:server # tsup --config tsup.server.config.ts — bundled dist/server.cjs for the Docker image (separate from dist/server-app.* above — don't confuse the two)
 ```
 
@@ -29,6 +29,8 @@ src/
   index.ts                # Node entry point ("platex"): re-exports compile/createPlatexClient/handleCompileRequest/types
   client-entry.ts          # Edge entry point ("platex/client"): remote-only variants of the same API, zero Node built-ins
   server-entry.ts          # Server entry point ("platex/server"): re-exports createApp/createCompileRoute
+  cli.ts                   # runCli() — the `platex` CLI logic; unit-testable via injectable CliIO, never calls process.exit
+  cli-main.ts              # Executable bin entry: SIGINT→AbortSignal wiring around runCli; built to dist/cli.js with a shebang
   compile-core.ts          # compile() implementation — local/remote dispatch, limits/env-var resolution
   client-core.ts           # makeClient() — edge-safe factory shared by client.ts (Node) and client-entry.ts (edge)
   client.ts                # Node's createPlatexClient — wraps compile() (local+remote)
@@ -60,6 +62,8 @@ Why so many small files at the top level instead of one `index.ts`: `client-core
 | `platex` | `src/index.ts` | Node | Full library, local-compile fallback |
 | `platex/client` | `src/client-entry.ts` | Edge/anything with `fetch` | Remote-only; throws a clear error if no `serviceUrl` resolves instead of trying local compilation |
 | `platex/server` | `src/server-entry.ts` | Node | `createApp`/`createCompileRoute`, for embedding the HTTP API |
+
+There is also a **bin**: `package.json`'s `"bin": { "platex": "./dist/cli.js" }`, built from `src/cli-main.ts` by the second tsup config object (ESM-only, shebang banner, `clean: false` so it doesn't wipe the library build that runs first). CLI flags map 1:1 onto `CompileOptions` — a new compile option should get a matching flag, not CLI-only behavior.
 
 When adding a new top-level export, decide which entry point(s) it belongs in and update `tsup.config.ts`'s `entry` map + `package.json`'s `exports` if you add a new entry point (not needed for adding exports to an existing one). If touching `client-core.ts`/`request-handler-core.ts`/`defaults.ts`, verify edge-safety after building: `grep -n "require(\|from '" dist/client.js` should show no `node:` specifiers.
 

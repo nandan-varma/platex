@@ -21,7 +21,8 @@
     "tectonic",
     "nextjs",
     "vercel",
-    "compile"
+    "compile",
+    "cli"
   ],
   "type": "module",
   "exports": {
@@ -40,6 +41,9 @@
       "import": "./dist/server-app.js",
       "require": "./dist/server-app.cjs"
     }
+  },
+  "bin": {
+    "platex": "./dist/cli.js"
   },
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
