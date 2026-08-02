@@ -62,13 +62,33 @@ export interface CompileOptions {
   engine?: Engine;
   passes?: PassCount;
   bibliography?: BibEngine;
-  /** Additional files keyed by filename (e.g. 'refs.bib', 'figure.png') */
-  files?: Record<string, Buffer>;
+  /**
+   * Additional files keyed by filename (e.g. 'refs.bib', 'figure.png').
+   * `Uint8Array` (not just `Buffer`) so browser/edge callers without a
+   * `Buffer` global can pass files too.
+   */
+  files?: Record<string, Buffer | Uint8Array>;
   /**
    * If set, compile via the remote platex HTTP service instead of local TeX.
    * Falls back to `process.env.PLATEX_SERVICE_URL` when omitted.
    */
   serviceUrl?: string;
+  /**
+   * Configuration for the WASM/browser compile backend (`platex/client`,
+   * used when no `serviceUrl` resolves and the runtime is WASM-capable).
+   * Ignored by the Node (`platex`) and remote entry points.
+   */
+  wasm?: {
+    /**
+     * Where `busytex.wasm`/`busytex.js`/`texlive-extra.*` are hosted (a URL
+     * path your app serves them from). Falls back to
+     * `process.env.PLATEX_WASM_BASE_PATH` when omitted — required one way or
+     * the other for the WASM backend to run.
+     */
+    basePath?: string;
+    /** Extra TeX Live package catalogs to preload (texlyre-busytex's `preloadDataPackages`/`catalogDataPackages`). */
+    dataPackages?: string[];
+  };
   /**
    * Bearer token sent as `Authorization: Bearer <apiKey>` to the remote
    * service (pairs with the service's `PLATEX_API_KEY`). Falls back to

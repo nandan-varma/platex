@@ -21,7 +21,12 @@ export default defineConfig([
     // are emitted so consumers can still debug into the original source.
     minify: true,
     treeshake: true,
-    external: ['hono', '@hono/node-server', '@hono/zod-validator', 'zod'],
+    // texlyre-busytex is only ever reached via a runtime `import()` in
+    // src/browser/index.ts (never a static import) — kept external so it
+    // stays a genuine dynamic import that the consumer's own bundler
+    // code-splits, instead of esbuild inlining the whole WASM-engine glue
+    // into dist/client.js for every `platex/client` consumer.
+    external: ['hono', '@hono/node-server', '@hono/zod-validator', 'zod', 'texlyre-busytex'],
   },
   {
     // The `platex` bin (package.json "bin"). ESM-only, Node-only; built as a
@@ -35,6 +40,11 @@ export default defineConfig([
     clean: false,
     minify: true,
     treeshake: true,
-    external: ['hono', '@hono/node-server', '@hono/zod-validator', 'zod'],
+    // texlyre-busytex is only ever reached via a runtime `import()` in
+    // src/browser/index.ts (never a static import) — kept external so it
+    // stays a genuine dynamic import that the consumer's own bundler
+    // code-splits, instead of esbuild inlining the whole WASM-engine glue
+    // into dist/client.js for every `platex/client` consumer.
+    external: ['hono', '@hono/node-server', '@hono/zod-validator', 'zod', 'texlyre-busytex'],
   },
 ]);

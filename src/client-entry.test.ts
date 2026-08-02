@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import * as browserBackend from './browser/index.js';
 import { createPlatexClient, handleCompileRequest } from './client-entry.js';
-import type { CompileResponse } from './types.js';
+import type { CompileResponse, CompileResult } from './types.js';
 
 function jsonResponse(body: CompileResponse, init: { status?: number } = {}): Response {
   return new Response(JSON.stringify(body), {
@@ -12,11 +13,44 @@ function jsonResponse(body: CompileResponse, init: { status?: number } = {}): Re
 describe('createPlatexClient (edge entry, platex/client)', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
-  it('throws a clear TypeError instead of attempting local compilation when no serviceUrl is configured', async () => {
+  it('throws a clear TypeError instead of attempting a WASM compile when no serviceUrl is configured and running under Node', async () => {
     const client = createPlatexClient();
-    await expect(client.compile('src')).rejects.toThrow(/platex\/client.*only compiles remotely/s);
+    await expect(client.compile('src')).rejects.toThrow(
+      /no serviceUrl configured and this runtime is not WASM-capable/,
+    );
+  });
+
+  it('falls back to the WASM backend when no serviceUrl is configured and the runtime is not plain Node', async () => {
+    vi.stubGlobal('process', { ...process, versions: {} });
+    const fakeResult: CompileResult = {
+      pdf: Buffer.from('%PDF-1.4'),
+      errors: [],
+      warnings: [],
+      logs: [],
+    };
+    const spy = vi.spyOn(browserBackend, 'runBrowserPipeline').mockResolvedValue(fakeResult);
+
+    const client = createPlatexClient({ wasm: { basePath: '/assets' } });
+    const result = await client.compile('src');
+
+    expect(spy).toHaveBeenCalledWith(
+      'src',
+      expect.objectContaining({ wasm: { basePath: '/assets' } }),
+    );
+    expect(result).toBe(fakeResult);
+  });
+
+  it('throws the same clear error on a non-Node runtime with no WebAssembly global', async () => {
+    vi.stubGlobal('process', { ...process, versions: {} });
+    vi.stubGlobal('WebAssembly', undefined);
+
+    const client = createPlatexClient();
+    await expect(client.compile('src')).rejects.toThrow(
+      /no serviceUrl configured and this runtime is not WASM-capable/,
+    );
   });
 
   it('rejects an empty or non-string source with a TypeError before any network call', async () => {
@@ -67,7 +101,7 @@ describe('handleCompileRequest (edge entry, platex/client)', () => {
 
     expect(res.status).toBe(400);
     const body = (await res.json()) as { error: string };
-    expect(body.error).toMatch(/only compiles remotely/);
+    expect(body.error).toMatch(/not WASM-capable/);
   });
 
   it('proxies through to the remote service and returns the PDF bytes', async () => {

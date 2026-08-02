@@ -6,6 +6,22 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.0] — 2026-08-02
+
+### Added
+
+- WASM/browser compile backend for `platex/client`: when no `serviceUrl`
+  resolves and the runtime is WASM-capable (browsers, most edge runtimes —
+  plain Node.js is excluded), compiles in-process via
+  [`texlyre-busytex`](https://www.npmjs.com/package/texlyre-busytex) (WASM
+  TeX Live), dynamically imported so it's never bundled unless used.
+  Configure via `CompileOptions.wasm.basePath`/`wasm.dataPackages` or the
+  `PLATEX_WASM_BASE_PATH` env var. `engine: 'tectonic'` and
+  `bibliography: 'biber'` throw a clear error on this backend (unsupported by
+  `texlyre-busytex`).
+- `CompileOptions.files` now also accepts plain `Uint8Array` values (not just
+  `Buffer`), for callers on runtimes without a `Buffer` global.
+
 ## [0.0.7] — 2026-07-17
 
 ### Changed
@@ -105,7 +121,9 @@ project adheres to [Semantic Versioning](https://semver.org/).
   target, CI/release workflows, end-to-end test suite, and a Next.js
   docs/demo site.
 
-[Unreleased]: https://github.com/nandan-varma/platex/compare/v0.0.6...HEAD
+[Unreleased]: https://github.com/nandan-varma/platex/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/nandan-varma/platex/compare/v0.0.7...v0.1.0
+[0.0.7]: https://github.com/nandan-varma/platex/compare/v0.0.6...v0.0.7
 [0.0.6]: https://github.com/nandan-varma/platex/compare/v0.0.5...v0.0.6
 [0.0.5]: https://github.com/nandan-varma/platex/compare/v0.0.4...v0.0.5
 [0.0.4]: https://github.com/nandan-varma/platex/compare/v0.0.3...v0.0.4

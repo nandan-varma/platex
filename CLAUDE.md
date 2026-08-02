@@ -33,7 +33,7 @@ Tests compile real LaTeX via a bundled Tectonic binary at `bin/tectonic` (gitign
 ```
 src/
   index.ts                # Node entry point ("platex"): re-exports compile/createPlatexClient/handleCompileRequest/types
-  client-entry.ts          # Edge entry point ("platex/client"): remote-only variants of the same API, zero Node built-ins
+  client-entry.ts          # Edge entry point ("platex/client"): remote when serviceUrl resolves, else WASM fallback (browser/index.ts) on WASM-capable non-Node runtimes, else throws; zero Node built-ins
   server-entry.ts          # Server entry point ("platex/server"): re-exports createApp/createCompileRoute
   cli.ts                   # runCli() — the `platex` CLI logic; unit-testable via injectable CliIO, never calls process.exit
   cli-main.ts              # Executable bin entry: SIGINT→AbortSignal wiring around runCli; built to dist/cli.js with a shebang
@@ -54,6 +54,8 @@ src/
     utils.ts                  # validateFilename/isFilenameValid (path-traversal defense) + shared engine/PATH resolution
   remote/
     client.ts               # callRemote — HTTP client for the platex service (auth, retry, abort)
+  browser/
+    index.ts                 # runBrowserPipeline — WASM/browser compile backend (platex/client only), dynamically imports texlyre-busytex
   server/
     app.ts                  # createApp(config?) — Hono app factory
     index.ts                # Standalone server entry (node server), reads env vars only
@@ -75,12 +77,12 @@ Why so many small files at the top level instead of one `index.ts`: `client-core
 | Import | File | Runtime | Notes |
 |---|---|---|---|
 | `platex` | `src/index.ts` | Node | Full library, local-compile fallback |
-| `platex/client` | `src/client-entry.ts` | Edge/anything with `fetch` | Remote-only; throws a clear error if no `serviceUrl` resolves instead of trying local compilation |
+| `platex/client` | `src/client-entry.ts` | Edge/anything with `fetch` | Remote when `serviceUrl` resolves; otherwise falls back to `src/browser/index.ts`'s WASM engine (`texlyre-busytex`) on WASM-capable non-Node runtimes; throws a clear error only when neither is available |
 | `platex/server` | `src/server-entry.ts` | Node | `createApp`/`createCompileRoute`, for embedding the HTTP API |
 
 There is also a **bin**: `package.json`'s `"bin": { "platex": "./dist/cli.js" }`, built from `src/cli-main.ts` by the second tsup config object (ESM-only, shebang banner, `clean: false` so it doesn't wipe the library build that runs first). CLI flags map 1:1 onto `CompileOptions` — a new compile option should get a matching flag, not CLI-only behavior.
 
-When adding a new top-level export, decide which entry point(s) it belongs in and update `tsup.config.ts`'s `entry` map + `package.json`'s `exports` if you add a new entry point (not needed for adding exports to an existing one). If touching `client-core.ts`/`request-handler-core.ts`/`defaults.ts`, verify edge-safety after building: `grep -n "require(\|from '" dist/client.js` should show no `node:` specifiers. Also verify no bare `Buffer.` references: `grep -nE '\bBuffer\.' dist/client.js` should be empty.
+When adding a new top-level export, decide which entry point(s) it belongs in and update `tsup.config.ts`'s `entry` map + `package.json`'s `exports` if you add a new entry point (not needed for adding exports to an existing one). If touching `client-core.ts`/`request-handler-core.ts`/`defaults.ts`/`browser/index.ts`, verify edge-safety after building: `grep -n "require(\|from '" dist/client.js` should show no `node:` specifiers. Also verify no bare `Buffer.` references: `grep -nE '\bBuffer\.' dist/client.js` should be empty. `texlyre-busytex` (the WASM engine `browser/index.ts` dynamically `import()`s) is listed in `tsup.config.ts`'s `external` array — without that, esbuild inlines it into `dist/client.js` instead of leaving a lazy dynamic import, defeating the point of not shipping it to every consumer; if you ever add another dynamically-imported dependency, add it to `external` too and re-run `grep -n "texlyre-busytex" dist/client.js` (or the new package's name) to confirm it stayed a real `import(...)` call, not inlined source.
 
 ## Conventions
 

@@ -67,6 +67,11 @@ export function defaultApiKey(): string | undefined {
   return readEnv('PLATEX_API_KEY');
 }
 
+/** `process.env.PLATEX_WASM_BASE_PATH`, or undefined if unset/unavailable. */
+export function defaultWasmBasePath(): string | undefined {
+  return readEnv('PLATEX_WASM_BASE_PATH');
+}
+
 /**
  * Detect the `Buffer` global once at module scope. The runtime probe is
  * wrapped in a function so that the minifier (esbuild via tsup) cannot

@@ -86,6 +86,7 @@ The individual feature `.tex` files used as compilation fixtures (math, lists, t
 | **Remote** (recommended for Vercel/edge) | `serviceUrl` resolved | Tectonic (on the service) | Production, or any edge runtime |
 | **Local** | No `serviceUrl`, system TeX found | pdflatex / xelatex / lualatex | Self-hosted or dev with TeX Live |
 | **Local fallback** | No `serviceUrl`, no system TeX | Bundled Tectonic binary | Dev without TeX Live installed |
+| **WASM/browser** (`platex/client` only) | No `serviceUrl`, WASM-capable runtime (browsers, most edge runtimes) | pdflatex / xelatex / lualatex via bundled WASM TeX Live | Client-side compiling in the browser, or edge runtimes without a remote service |
 
 The library auto-selects the engine — you don't configure this directly. `serviceUrl` resolves from the explicit option, falling back to `PLATEX_SERVICE_URL`.
 
@@ -94,10 +95,10 @@ The library auto-selects the engine — you don't configure this directly. `serv
 | Import from | Runtime | What it's for |
 |---|---|---|
 | `@nandan-varma/platex` | Node.js | `compile`, `createPlatexClient`, `handleCompileRequest` — full library, local-compile fallback included |
-| `@nandan-varma/platex/client` | Anything with `fetch` — Vercel/Next.js Edge Runtime, Cloudflare Workers, Bun, Deno, browsers | Same client/handler API, remote-only (see below) |
+| `@nandan-varma/platex/client` | Anything with `fetch` — Vercel/Next.js Edge Runtime, Cloudflare Workers, Bun, Deno, browsers | Same client/handler API; remote when `serviceUrl` is configured, otherwise falls back to an in-browser/WASM TeX engine (see below) |
 | `@nandan-varma/platex/server` | Node.js | `createApp`, `createCompileRoute` — embed the compile HTTP API into your own server instead of running the standalone service |
 
-`platex/client` never imports `node:child_process`/`node:fs`/`node:os`, so it's safe to bundle for edge deployments. If you call `.compile()` without a `serviceUrl` configured (and none in `PLATEX_SERVICE_URL`), it throws immediately with a message telling you what's missing, instead of trying (and failing) to spawn a local TeX process that can't exist on that runtime.
+`platex/client` never imports `node:child_process`/`node:fs`/`node:os`, so it's safe to bundle for edge deployments. If you call `.compile()` without a `serviceUrl` configured (and none in `PLATEX_SERVICE_URL`), it falls back to an in-browser/WASM TeX engine on WASM-capable runtimes (browsers, most edge runtimes — plain Node.js is deliberately excluded from this fallback, see below); it throws only when neither a `serviceUrl` nor WASM support is available.
 
 ```typescript
 // app/api/compile/route.ts — deployed to the Edge Runtime
@@ -106,6 +107,29 @@ import { createPlatexClient, handleCompileRequest } from '@nandan-varma/platex/c
 
 export const POST = handleCompileRequest // or: createRequestHandler(createPlatexClient({ ... }))
 ```
+
+### The WASM/browser fallback
+
+When `platex/client` is used with no `serviceUrl` resolved, and the runtime is WASM-capable, it compiles in-process using [`texlyre-busytex`](https://www.npmjs.com/package/texlyre-busytex) (a WASM build of TeX Live), dynamically imported on first use so it's never pulled into your bundle unless this path actually runs. "WASM-capable" means `typeof WebAssembly !== 'undefined'` **and** not plain Node.js — Node also has a global `WebAssembly`, so it's explicitly excluded to avoid silently trying (and failing) to run a browser engine under `vitest`/`node script.js`/etc.
+
+```typescript
+import { createPlatexClient } from '@nandan-varma/platex/client'
+
+const platex = createPlatexClient({
+  // no serviceUrl → falls back to WASM on WASM-capable runtimes
+  wasm: {
+    basePath: '/tex-assets',            // where busytex.wasm / busytex.js / texlive-extra.* are hosted
+    dataPackages: ['latex', 'amsmath'], // optional: preload/catalog specific TeX Live packages
+  },
+})
+
+const result = await platex.compile(source)
+```
+
+- `wasm.basePath` is required for this path (or set `PLATEX_WASM_BASE_PATH`) — platex only needs to know where to fetch the WASM engine and its data files from. Hosting/staging those files (e.g. a CDN redirect for the large `texlive-extra.data` package) is entirely your app's responsibility, not this library's.
+- `serviceUrl` always wins when both are configured — WASM is a fallback, never a preference.
+- `engine: 'tectonic'` and `bibliography: 'biber'` aren't supported by this backend (`texlyre-busytex` doesn't ship either) and throw a `TypeError` immediately; use `pdflatex`/`xelatex`/`lualatex` and `bibtex`/`none`, or configure a `serviceUrl` for full Tectonic/biber support.
+- A single WASM runner instance is reused across calls in the same session (recreated only if `wasm.basePath` changes), so repeated compiles after the first are fast.
 
 ### What Tectonic is
 
@@ -348,8 +372,9 @@ Nothing below is hardcoded — every default can be overridden per call, per cli
 | `engine` | `'pdflatex' \| 'xelatex' \| 'lualatex'` | `'pdflatex'` | TeX engine (used when system TeX is available; Tectonic is always XeTeX-based) |
 | `passes` | `'auto' \| 1 \| 2 \| 3` | `'auto'` | Compilation passes. `'auto'` reruns until output is stable |
 | `bibliography` | `'bibtex' \| 'biber' \| 'none'` | `'bibtex'` | Bibliography engine |
-| `files` | `Record<string, Buffer>` | `{}` | Additional files: `.bib`, images, included `.tex` files |
-| `serviceUrl` | `string` | `PLATEX_SERVICE_URL` env var | URL of the platex service. If unset (and no env var), compiles locally (Node entry only) |
+| `files` | `Record<string, Buffer \| Uint8Array>` | `{}` | Additional files: `.bib`, images, included `.tex` files |
+| `serviceUrl` | `string` | `PLATEX_SERVICE_URL` env var | URL of the platex service. If unset (and no env var), compiles locally (`platex` entry) or via WASM (`platex/client` entry, see [WASM/browser fallback](#the-wasmbrowser-fallback)) |
+| `wasm` | `{ basePath?: string; dataPackages?: string[] }` | `basePath` from `PLATEX_WASM_BASE_PATH` env var | `platex/client`-only. Configures the WASM/browser fallback engine's asset location and preloaded TeX Live packages |
 | `apiKey` | `string` | `PLATEX_API_KEY` env var | Sent as `Authorization: Bearer <apiKey>` to the service. Pairs with the service's own `PLATEX_API_KEY` |
 | `headers` | `Record<string, string>` | `{}` | Extra headers merged into the remote request |
 | `timeout` | `number` | `30000` | Overall wall-clock budget in milliseconds for the *entire* compile pipeline (all LaTeX passes plus bibliography combined for local; the whole HTTP round-trip for remote) — not per-process |
