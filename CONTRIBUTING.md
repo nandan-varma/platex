@@ -28,7 +28,7 @@ npm run dev          # run the standalone compile server locally
 ```
 
 All three checks (typecheck, test, lint) must pass before a PR — CI runs them
-on Node 20 and 22, then builds and smoke-tests the CLI.
+on Node 24 and 26, then builds and smoke-tests the CLI.
 
 ## Project invariants
 

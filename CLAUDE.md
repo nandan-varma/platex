@@ -120,7 +120,7 @@ These are deliberate and load-bearing — don't regress them:
 
 ## CI / Release
 
-- `.github/workflows/ci.yml` (push/PR to main, Node 20 + 22): typecheck → lint → download Tectonic → test → build → grep check that `dist/client.*` has no `node:` imports → end-to-end CLI smoke test (compiles a real PDF). Anything that breaks one of those steps breaks CI even if it works locally.
+- `.github/workflows/ci.yml` (push/PR to main, Node 24 + 26): typecheck → lint → download Tectonic → test → build → grep check that `dist/client.*` has no `node:` imports → end-to-end CLI smoke test (compiles a real PDF). Anything that breaks one of those steps breaks CI even if it works locally.
 - `.github/workflows/release.yml`: publishes to npm with provenance on `v*` tags (`prepublishOnly` re-runs typecheck + tests + build).
 
 ## Security notes
