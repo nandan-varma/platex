@@ -34,6 +34,15 @@ jobs:
           path: bin/tectonic
           key: tectonic-0.15.0-${{ runner.os }}
 
+      # Tectonic downloads its TeX bundle on first use (cached under
+      # XDG_CACHE_HOME=/tmp/.tectonic-cache-<uid>, see src/local/tectonic.ts).
+      # Caching it keeps the first-compile tests off the network.
+      - name: Cache Tectonic bundle
+        uses: actions/cache@v6
+        with:
+          path: /tmp/.tectonic-cache-*
+          key: tectonic-bundle-0.15.0-${{ runner.os }}-v1
+
       - run: node scripts/download-tectonic.mjs
 
       - run: npm test
